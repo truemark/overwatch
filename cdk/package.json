@@ -2,7 +2,7 @@
   "name": "overwatch-cdk",
   "version": "0.0.1",
   "bin": {
-    "autoalarm": "bin/overwatch.js"
+    "overwatch": "bin/overwatch.js"
   },
   "scripts": {
     "build": "tsc",
