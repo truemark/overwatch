@@ -6,9 +6,12 @@
   },
   "scripts": {
     "build": "tsc",
+    "postbuild": "prettier --check . && gts lint",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "lint": "gts lint",
+    "cdk": "cdk",
+    "makepretty": "prettier --write ."
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
