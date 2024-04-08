@@ -1,14 +1,60 @@
 import {Construct} from 'constructs';
 import {Domain, EngineVersion} from 'aws-cdk-lib/aws-opensearchservice';
-import {PolicyStatement, AnyPrincipal, Effect} from 'aws-cdk-lib/aws-iam';
+import {
+  AccountPrincipal,
+  AnyPrincipal,
+  Effect,
+  PolicyStatement,
+} from 'aws-cdk-lib/aws-iam';
 import {EbsDeviceVolumeType} from 'aws-cdk-lib/aws-ec2';
-import {RemovalPolicy} from 'aws-cdk-lib';
+import {CfnOutput, RemovalPolicy} from 'aws-cdk-lib';
+import {Bucket, BucketEncryption} from 'aws-cdk-lib/aws-s3';
+import {MainFunction} from './main-function';
+import {Rule} from 'aws-cdk-lib/aws-events';
+import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
+import {LambdaFunction} from 'aws-cdk-lib/aws-events-targets';
 
 export class OverwatchConstruct extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
     // TODO Add AWS Managed Grafana
+
+    const logsBucket = new Bucket(this, 'Logs', {
+      encryption: BucketEncryption.S3_MANAGED,
+    });
+    logsBucket.addToResourcePolicy(
+      new PolicyStatement({
+        actions: ['s3:PutObject', 's3:PutObjectAcl'],
+        principals: [new AccountPrincipal('889335235414')], // TODO Parameter
+        resources: [logsBucket.arnForObjects('*')],
+      })
+    );
+
+    new CfnOutput(this, 'LogsBucketArn', {
+      value: logsBucket.bucketArn,
+    });
+
+    const mainFunction = new MainFunction(this, 'MainFunction');
+    const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
+    const mainTarget = new LambdaFunction(mainFunction, {
+      deadLetterQueue,
+    });
+
+    const logsBucketRule = new Rule(this, 'LogsBucketRole', {
+      eventPattern: {
+        source: ['aws.s3'],
+        detailType: ['AWS API Call via CloudTrail'],
+        detail: {
+          eventName: ['PutObject'],
+          requestParameters: {
+            bucketName: [logsBucket.bucketName],
+          },
+        },
+      },
+      description: 'Routes S3 events to Overwatch',
+    });
+    logsBucketRule.addTarget(mainTarget);
 
     /* TODO Fouad Add OpenSearch Domain - See https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_opensearchservice-readme.html
       Do not have this code create a service linked role. That will be done in another project.
@@ -68,6 +114,7 @@ export class OverwatchConstruct extends Construct {
       },
     });
 
+    // TODO Currently allows all things to write to this
     domain.addAccessPolicies(
       new PolicyStatement({
         actions: [
