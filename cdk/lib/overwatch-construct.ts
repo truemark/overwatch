@@ -13,6 +13,7 @@ import {MainFunction} from './main-function';
 import {Rule} from 'aws-cdk-lib/aws-events';
 import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
 import {LambdaFunction} from 'aws-cdk-lib/aws-events-targets';
+import {Trail, ReadWriteType} from 'aws-cdk-lib/aws-cloudtrail';
 
 export class OverwatchConstruct extends Construct {
   constructor(scope: Construct, id: string) {
@@ -56,6 +57,20 @@ export class OverwatchConstruct extends Construct {
     });
     logsBucketRule.addTarget(mainTarget);
 
+    // Creating a CloudTrail
+    const s3LogsTrail = new Trail(this, 'S3LogsTrail', {
+      trailName: 's3-logs-trail',
+      isMultiRegionTrail: true,
+      includeGlobalServiceEvents: true,
+      sendToCloudWatchLogs: false,
+    });
+
+    // Add S3 data event Selector for the logs bucket
+    s3LogsTrail.addS3EventSelector([{bucket: logsBucket}], {
+      includeManagementEvents: false,
+      readWriteType: ReadWriteType.WRITE_ONLY,
+    });
+
     /* TODO Fouad Add OpenSearch Domain - See https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_opensearchservice-readme.html
       Do not have this code create a service linked role. That will be done in another project.
       Ensure encryption is enabled
@@ -76,11 +91,11 @@ export class OverwatchConstruct extends Construct {
       domainName: 'os-logs-domain',
       enableAutoSoftwareUpdate: true,
       capacity: {
-        warmNodes: 3,
-        masterNodes: 3,
         dataNodes: 3,
-        dataNodeInstanceType: 'r5.large.search',
-        masterNodeInstanceType: 'r5.large.search',
+        dataNodeInstanceType: 'm5.large.search',
+        masterNodes: 3,
+        masterNodeInstanceType: 'm5.large.search',
+        warmNodes: 3,
         warmInstanceType: 'ultrawarm1.medium.search',
       },
       zoneAwareness: {
@@ -106,11 +121,6 @@ export class OverwatchConstruct extends Construct {
       enableVersionUpgrade: true,
       fineGrainedAccessControl: {
         masterUserName: 'logsadmin',
-        // samlAuthenticationEnabled: true,
-        // samlAuthenticationOptions: {
-        //   idpEntityId: 'entity-id',
-        //   idpMetadataContent: 'metadata-content-with-quotes-escaped',
-        // },
       },
     });
 
