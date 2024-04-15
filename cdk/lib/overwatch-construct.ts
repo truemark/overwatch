@@ -5,6 +5,8 @@ import {
   AnyPrincipal,
   Effect,
   PolicyStatement,
+  Role,
+  ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
 import {EbsDeviceVolumeType} from 'aws-cdk-lib/aws-ec2';
 import {CfnOutput, RemovalPolicy} from 'aws-cdk-lib';
@@ -37,6 +39,85 @@ export class OverwatchConstruct extends Construct {
     });
 
     const mainFunction = new MainFunction(this, 'MainFunction');
+    const osisPolicy = new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: [
+        'osis:CreatePipeline',
+        'osis:ListPipelines',
+        'osis:GetPipeline',
+        'osis:ValidatePipeline',
+        'osis:TagResource',
+      ],
+      resources: ['*'],
+    });
+    mainFunction.addToRolePolicy(osisPolicy);
+
+    const osisLogsPolicy = new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: ['logs:CreateLogDelivery'],
+      resources: ['*'],
+    });
+    mainFunction.addToRolePolicy(osisLogsPolicy);
+
+    // Permission to create service linked roles for OpenSearch
+    const serviceLinkedRolePolicy = new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: ['iam:CreateServiceLinkedRole'],
+      resources: [
+        'arn:aws:iam::*:role/aws-service-role/osis.amazonaws.com/AWSServiceRoleForAmazonOpenSearchIngestionService',
+      ],
+      conditions: {
+        StringLike: {
+          'iam:AWSServiceName': 'osis.amazonaws.com',
+        },
+      },
+    });
+    mainFunction.addToRolePolicy(serviceLinkedRolePolicy);
+
+    const accountId = '381492266277';
+    const domainName = 'os-logs-domain';
+
+    // Create the IAM Role
+    const esRole = new Role(this, 'ElasticsrchAccessRole', {
+      assumedBy: new ServicePrincipal('osis-pipelines.amazonaws.com'),
+      description: 'Role to allow Elasticsearch domain operations',
+    });
+
+    // Add permissions to the role
+    esRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['es:DescribeDomain'],
+        resources: [`arn:aws:es:*:${accountId}:domain/*`],
+      })
+    );
+
+    esRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['es:ESHttp*'],
+        resources: [`arn:aws:es:*:${accountId}:domain/${domainName}/*`],
+      })
+    );
+
+    esRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:ListBucket', 's3:DeleteObject'],
+        resources: [
+          'arn:aws:s3:::overwatch-overwatchlogsf7d351c6-z9rixknklgby',
+          'arn:aws:s3:::overwatch-overwatchlogsf7d351c6-z9rixknklgby/*',
+        ],
+      })
+    );
+
+    const osisIamPassPolicy = new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: ['iam:PassRole'],
+      resources: [esRole.roleArn],
+    });
+    mainFunction.addToRolePolicy(osisIamPassPolicy);
+
     const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
     const mainTarget = new LambdaFunction(mainFunction, {
       deadLetterQueue,
@@ -125,6 +206,20 @@ export class OverwatchConstruct extends Construct {
       },
     });
 
+    // Create an IAM Role for OpenSearch Ingestion
+    const ingestionRole = new Role(this, 'OpenSearchIngestionRole', {
+      assumedBy: new ServicePrincipal('osis.amazonaws.com'),
+      description: 'Role for OpenSearch Ingestion',
+    });
+
+    // Attach policy to the role to allow writing to OpenSearch
+    ingestionRole.addToPolicy(
+      new PolicyStatement({
+        actions: ['es:ESHttpPost', 'es:ESHttpPut'],
+        resources: [domain.domainArn, `${domain.domainArn}/*`],
+      })
+    );
+
     // TODO Currently allows all things to write to this
     domain.addAccessPolicies(
       new PolicyStatement({
@@ -135,7 +230,7 @@ export class OverwatchConstruct extends Construct {
           'es:ESHttpDelete',
         ],
         effect: Effect.ALLOW,
-        principals: [new AnyPrincipal()],
+        principals: [new AnyPrincipal(), ingestionRole],
         resources: [domain.domainArn, `${domain.domainArn}/*`],
       })
     );
