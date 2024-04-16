@@ -39,6 +39,7 @@ export class OverwatchConstruct extends Construct {
     });
 
     const mainFunction = new MainFunction(this, 'MainFunction');
+
     const osisPolicy = new PolicyStatement({
       effect: Effect.ALLOW,
       actions: [
@@ -47,6 +48,10 @@ export class OverwatchConstruct extends Construct {
         'osis:GetPipeline',
         'osis:ValidatePipeline',
         'osis:TagResource',
+        'sqs:CreateQueue',
+        'sqs:SetQueueAttributes',
+        'sqs:GetQueueUrl',
+        'sqs:SendMessage',
       ],
       resources: ['*'],
     });
@@ -97,6 +102,23 @@ export class OverwatchConstruct extends Construct {
         effect: Effect.ALLOW,
         actions: ['es:ESHttp*'],
         resources: [`arn:aws:es:*:${accountId}:domain/${domainName}/*`],
+      })
+    );
+
+    esRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          'sqs:ChangeMessageVisibility',
+          'sqs:DeleteMessage',
+          'sqs:ReceiveMessage',
+          's3:GetObject',
+          's3:ListBucket',
+          's3:DeleteObject',
+          's3:GetBucketLocation',
+          's3:ListAllMyBuckets',
+        ],
+        resources: ['*'],
       })
     );
 

@@ -4,8 +4,15 @@ import {
   GetPipelineCommand,
   ResourceNotFoundException,
 } from '@aws-sdk/client-osis';
+import {
+  SQSClient,
+  CreateQueueCommand,
+  SendMessageCommand,
+} from '@aws-sdk/client-sqs';
 import {initialize} from '@nr1e/logging';
+
 const osisClient = new OSISClient({region: 'us-west-2'}); // Todo Adjust the region appropriately
+const sqsClient = new SQSClient({region: 'us-west-2'}); // Match the region to your Lambda function
 
 export async function handler(event: any): Promise<void> {
   const log = await initialize({
@@ -49,12 +56,20 @@ export async function handler(event: any): Promise<void> {
     }
   }
 
+  // Create SQS Queue
+  const queueUrl = (await createQueue(indexName)) ?? '';
+
+  // Create message body, could be JSON string or simple message
+  const messageBody = createS3Notification(event);
+
+  await sendMessage(queueUrl, messageBody);
+
   const pipelineConfigurationBody = generateLogPipelineYaml(
-    '/log/ingest',
     'https://search-os-logs-domain-7vhcl27kveefe6xmgiupjohldq.us-west-2.es.amazonaws.com',
     indexName,
     'us-west-2',
-    'arn:aws:iam::381492266277:role/Overwatch-OverwatchElasticsrchAccessRoleDA353646-Rlu4VhBWWDji'
+    'arn:aws:iam::381492266277:role/Overwatch-OverwatchElasticsrchAccessRoleDA353646-Rlu4VhBWWDji',
+    queueUrl
   );
 
   try {
@@ -64,7 +79,7 @@ export async function handler(event: any): Promise<void> {
       MaxUnits: 5,
       PipelineConfigurationBody: pipelineConfigurationBody,
       LogPublishingOptions: {
-        IsLoggingEnabled: false,
+        IsLoggingEnabled: true,
         CloudWatchLogDestination: {
           LogGroup: `/aws/vendedlogs/${pipelineName}`,
         },
@@ -85,24 +100,70 @@ export async function handler(event: any): Promise<void> {
   }
 }
 
+async function createQueue(indexName: string) {
+  const queueName = `${indexName}-queue`; // Custom queue name based on the index
+  try {
+    const createQueueCommand = new CreateQueueCommand({
+      QueueName: queueName,
+      Attributes: {
+        DelaySeconds: '0', // Customize attributes as needed
+        MessageRetentionPeriod: '345600', // Example: 4 days in seconds
+      },
+    });
+    const response = await sqsClient.send(createQueueCommand);
+    console.log('SQS Queue created:', response.QueueUrl);
+    return response.QueueUrl; // Return the new queue URL for further use
+  } catch (error) {
+    console.error('Failed to create SQS Queue:', error);
+    throw error; // Re-throw the error to handle it in the caller function
+  }
+}
+
+async function sendMessage(queueUrl: string, messageBody: any) {
+  const params = {
+    QueueUrl: queueUrl, // URL of the SQS queue
+    MessageBody: JSON.stringify(messageBody), // Stringify your message body if it's not a string
+  };
+
+  try {
+    const data = await sqsClient.send(new SendMessageCommand(params));
+    console.log('Success, message sent. Message ID:', data.MessageId);
+    return data; // Returns the response from the SDK
+  } catch (err) {
+    console.error('Error', err);
+    throw err; // Optional: depending on your error handling you might want to throw the error further
+  }
+}
+
 // Function to generate the YAML configuration
 function generateLogPipelineYaml(
-  httpPath: string,
   opensearchHost: string,
   indexName: string,
   region: string,
-  stsRoleArn: string
+  stsRoleArn: string,
+  queueUrl: string
 ) {
   return `
 version: "2"
 log-pipeline:
   source:
-    http:
-      path: "${httpPath}"
+    s3:
+      acknowledgments: true
+      notification_type: "sqs"
+      compression: "gzip"
+      codec:
+        newline:
+      sqs:
+        queue_url: "${queueUrl}"
+        maximum_messages: 10
+        visibility_timeout: "60s"
+        visibility_duplication_protection: true
+      aws:
+        region: "${region}"
+        sts_role_arn: "${stsRoleArn}"
   processor:
-    - date:
-        from_time_received: true
-        destination: "@timestamp"
+    - delete_entries:
+      with_keys: [ "s3" ]
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]
@@ -113,3 +174,34 @@ log-pipeline:
           sts_role_arn: "${stsRoleArn}"
 `;
 }
+
+const createS3Notification = (event: any) => {
+  const eventData = event.detail;
+  const s3BucketArn = eventData.resources.find(
+    (resource: any) => resource.type === 'AWS::S3::Bucket'
+  ).ARN;
+
+  const s3Notification = {
+    Records: [
+      {
+        eventVersion: '2.1',
+        eventSource: 'aws:s3',
+        awsRegion: eventData.awsRegion,
+        eventTime: eventData.eventTime,
+        eventName: 'ObjectCreated:Put',
+        s3: {
+          bucket: {
+            name: eventData.requestParameters.bucketName,
+            arn: s3BucketArn,
+          },
+          object: {
+            key: eventData.requestParameters.key,
+            size: eventData.additionalEventData.bytesTransferredIn,
+          },
+        },
+      },
+    ],
+  };
+
+  return s3Notification;
+};
