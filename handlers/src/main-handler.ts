@@ -10,128 +10,208 @@ import {
   SendMessageCommand,
 } from '@aws-sdk/client-sqs';
 import {initialize} from '@nr1e/logging';
+import {
+  CloudWatchLogsClient,
+  CreateLogGroupCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
 
-const osisClient = new OSISClient({region: 'us-west-2'}); // Todo Adjust the region appropriately
-const sqsClient = new SQSClient({region: 'us-west-2'}); // Match the region to your Lambda function
+// Constants for configuration
+const REGION = 'us-west-2';
+const osisClient = new OSISClient({region: REGION});
+const sqsClient = new SQSClient({region: REGION});
+const cwlClient = new CloudWatchLogsClient({region: REGION});
 
+// Main handler function
 export async function handler(event: any): Promise<void> {
-  const log = await initialize({
+  const log = await initializeLogger();
+  log.trace().unknown('event', event).msg('Received S3 event');
+
+  const {bucketName, objectKey} = extractBucketDetails(event);
+  if (!bucketName || !objectKey) {
+    log.error().msg('Missing bucket name or object key in the event detail');
+    return;
+  }
+
+  const indexName = extractIndexName(objectKey);
+  const pipelineName = `ingestion-pipeline-${indexName}`;
+
+  const queueUrl = await createQueueIfNeeded(indexName, log);
+  const messageBody = createS3Notification(event);
+
+  await sendMessageToQueue(queueUrl, messageBody, log);
+  await ensurePipelineExists(pipelineName, indexName, queueUrl, log);
+}
+
+// Initializes the logging service
+async function initializeLogger() {
+  return initialize({
     svc: 'Overwatch',
     name: 'main-handler',
     level: 'trace',
   });
+}
 
-  log.trace().unknown('event', event).msg('Received S3 event');
+// Extracts bucket name and object key from the event
+function extractBucketDetails(event: any) {
+  return {
+    bucketName: event.detail.requestParameters.bucketName,
+    objectKey: event.detail.requestParameters.key,
+  };
+}
 
-  // Extract the bucket name and object key from the event
-  const bucketName = event.detail.requestParameters.bucketName;
-  const objectKey = event.detail.requestParameters.key;
+// Extracts index name from the object key
+function extractIndexName(objectKey: string) {
+  return objectKey.split('/')[1]; // Assumes index name is part of the object key
+}
 
-  if (!bucketName || !objectKey) {
-    log.error().msg('Missing bucket name or object key in the event detail');
-    return; // Exit if necessary details are not present
-  }
-
-  const indexName = objectKey.split('/')[1]; // Assuming index name is part of the object key
-  const pipelineName = `ingestion-pipeline-${indexName}`;
-
-  //Check if Pipeline already exists
+// Ensures that the pipeline exists or creates a new one
+async function ensurePipelineExists(
+  pipelineName: string,
+  indexName: string,
+  queueUrl: string,
+  log: any
+) {
   try {
-    const command = new GetPipelineCommand({
-      PipelineName: pipelineName, // required
-    });
-    await osisClient.send(command);
+    await osisClient.send(new GetPipelineCommand({PipelineName: pipelineName}));
+    log
+      .info()
+      .str('pipelineName', pipelineName)
+      .msg('Pipeline already exists.');
   } catch (error) {
     if (error instanceof ResourceNotFoundException) {
-      // Handle the case where the pipeline does not exist
-      console.error(
-        'Pipeline not found,',
-        pipelineName,
-        ' creating new pipeline...'
-      );
+      log
+        .info()
+        .str('pipelineName', pipelineName)
+        .msg('Pipeline not found, creating new pipeline...');
+      await createPipeline(pipelineName, indexName, queueUrl, log);
     } else {
-      // Handle other possible exceptions
-      console.error('Pipeline already exists:', error);
-      return;
+      log.error().err(error).msg('Error while checking pipeline existence');
+      throw error;
     }
   }
+}
 
-  // Create SQS Queue
-  const queueUrl = (await createQueue(indexName)) ?? '';
-
-  // Create message body, could be JSON string or simple message
-  const messageBody = createS3Notification(event);
-
-  await sendMessage(queueUrl, messageBody);
+// Creates a new pipeline with given parameters
+async function createPipeline(
+  pipelineName: string,
+  indexName: string,
+  queueUrl: string,
+  log: any
+) {
+  const logGroupName = `/aws/vendedlogs/${pipelineName}`;
+  await ensureLogGroupExists(logGroupName, log);
+  const opensearchHost = process.env.OS_ENDPOINT || '';
+  const opensearchRoleArn = process.env.OSIS_ROLE_ARN || '';
 
   const pipelineConfigurationBody = generateLogPipelineYaml(
-    'https://search-os-logs-domain-7vhcl27kveefe6xmgiupjohldq.us-west-2.es.amazonaws.com',
+    opensearchHost,
     indexName,
-    'us-west-2',
-    'arn:aws:iam::381492266277:role/Overwatch-OverwatchElasticsrchAccessRoleDA353646-Rlu4VhBWWDji',
-    queueUrl
-  );
-
-  try {
-    const input = {
-      PipelineName: pipelineName,
-      MinUnits: 1,
-      MaxUnits: 5,
-      PipelineConfigurationBody: pipelineConfigurationBody,
-      LogPublishingOptions: {
-        IsLoggingEnabled: true,
-        CloudWatchLogDestination: {
-          LogGroup: `/aws/vendedlogs/${pipelineName}`,
+    REGION,
+    opensearchRoleArn,
+    queueUrl,
+    JSON.stringify({
+      settings: {
+        number_of_shards: 1,
+        number_of_replicas: 0,
+      },
+      mappings: {
+        properties: {
+          time: {
+            type: 'date',
+            format: 'epoch_millis',
+          },
         },
       },
-      BufferOptions: {
-        PersistentBufferEnabled: false,
-      },
-    };
+    })
+  );
 
-    const command = new CreatePipelineCommand(input);
-    const response = await osisClient.send(command);
+  const input = {
+    PipelineName: pipelineName,
+    MinUnits: 1,
+    MaxUnits: 5,
+    PipelineConfigurationBody: pipelineConfigurationBody,
+    LogPublishingOptions: {
+      IsLoggingEnabled: true,
+      CloudWatchLogDestination: {
+        LogGroup: logGroupName,
+      },
+    },
+    BufferOptions: {
+      PersistentBufferEnabled: false,
+    },
+  };
+
+  try {
+    const response = await osisClient.send(new CreatePipelineCommand(input));
     log
       .info()
       .str('pipelineName', pipelineName)
       .msg('Pipeline created successfully');
   } catch (error) {
     log.error().err(error).msg('Error creating pipeline');
+    throw error;
   }
 }
 
-async function createQueue(indexName: string) {
-  const queueName = `${indexName}-queue`; // Custom queue name based on the index
+// Creates an SQS queue if it doesn't exist
+async function createQueueIfNeeded(
+  indexName: string,
+  log: any
+): Promise<string> {
+  const queueName = `${indexName}-queue`;
   try {
-    const createQueueCommand = new CreateQueueCommand({
-      QueueName: queueName,
-      Attributes: {
-        DelaySeconds: '0', // Customize attributes as needed
-        MessageRetentionPeriod: '345600', // Example: 4 days in seconds
-      },
-    });
-    const response = await sqsClient.send(createQueueCommand);
-    console.log('SQS Queue created:', response.QueueUrl);
-    return response.QueueUrl; // Return the new queue URL for further use
+    const {QueueUrl} = await sqsClient.send(
+      new CreateQueueCommand({
+        QueueName: queueName,
+        Attributes: {
+          DelaySeconds: '0',
+          MessageRetentionPeriod: '345600',
+        },
+      })
+    );
+    log.info().str('queueName', queueName).msg('SQS Queue created');
+    return QueueUrl || '';
   } catch (error) {
-    console.error('Failed to create SQS Queue:', error);
-    throw error; // Re-throw the error to handle it in the caller function
+    log.error().err(error).msg('Failed to create SQS Queue');
+    throw error;
   }
 }
 
-async function sendMessage(queueUrl: string, messageBody: any) {
-  const params = {
-    QueueUrl: queueUrl, // URL of the SQS queue
-    MessageBody: JSON.stringify(messageBody), // Stringify your message body if it's not a string
-  };
-
+// Sends a message to the specified SQS queue
+async function sendMessageToQueue(
+  queueUrl: string,
+  messageBody: any,
+  log: any
+) {
   try {
-    const data = await sqsClient.send(new SendMessageCommand(params));
-    console.log('Success, message sent. Message ID:', data.MessageId);
-    return data; // Returns the response from the SDK
-  } catch (err) {
-    console.error('Error', err);
-    throw err; // Optional: depending on your error handling you might want to throw the error further
+    const {MessageId} = await sqsClient.send(
+      new SendMessageCommand({
+        QueueUrl: queueUrl,
+        MessageBody: JSON.stringify(messageBody),
+      })
+    );
+    log.info().str('messageId', MessageId).msg('Message sent to SQS Queue');
+  } catch (error) {
+    log.error().err(error).msg('Failed to send message to SQS Queue');
+    throw error;
+  }
+}
+
+async function ensureLogGroupExists(logGroupName: string, log: any) {
+  try {
+    // Try to create the log group (idempotent if it already exists)
+    await cwlClient.send(new CreateLogGroupCommand({logGroupName}));
+    log.info().str('logGroupName', logGroupName).msg('Log group ensured.');
+  } catch (error) {
+    if ((error as Error).name === 'ResourceAlreadyExistsException') {
+      log
+        .info()
+        .str('logGroupName', logGroupName)
+        .msg('Log group already exists.');
+    } else {
+      log.error().err(error).msg('Failed to ensure log group exists');
+      throw error;
+    }
   }
 }
 
@@ -141,7 +221,8 @@ function generateLogPipelineYaml(
   indexName: string,
   region: string,
   stsRoleArn: string,
-  queueUrl: string
+  queueUrl: string,
+  indexMapping: string
 ) {
   return `
 version: "2"
@@ -162,12 +243,17 @@ log-pipeline:
         region: "${region}"
         sts_role_arn: "${stsRoleArn}"
   processor:
+    - parse_json:
+        source: "message"
     - delete_entries:
-      with_keys: [ "s3" ]
+        with_keys: [ "s3", "message" ]
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]
         index: "${indexName}"
+        index_type: "custom"
+        template_content: |
+          ${indexMapping}
         aws:
           serverless: false
           region: "${region}"
