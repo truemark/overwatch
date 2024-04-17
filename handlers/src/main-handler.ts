@@ -102,7 +102,10 @@ async function createPipeline(
   await ensureLogGroupExists(logGroupName, log);
   const opensearchHost = process.env.OS_ENDPOINT || '';
   const opensearchRoleArn = process.env.OSIS_ROLE_ARN || '';
-
+  if (!opensearchHost || !opensearchRoleArn) {
+    log.error().msg('Cannot find env vars OS_ENDPOINT or OSIS_ROLE_ARN');
+    return;
+  }
   const pipelineConfigurationBody = generateLogPipelineYaml(
     opensearchHost,
     indexName,
