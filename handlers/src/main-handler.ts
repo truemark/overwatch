@@ -247,7 +247,6 @@ log-pipeline:
         sts_role_arn: "${stsRoleArn}"
   processor:
     - parse_json:
-        source: "message"
     - delete_entries:
         with_keys: [ "s3", "message" ]
   sink:
