@@ -248,7 +248,7 @@ log-pipeline:
   processor:
     - parse_json:
     - delete_entries:
-        with_keys: [ "s3", "message" ]
+        with_keys: [ "s3" ]
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]

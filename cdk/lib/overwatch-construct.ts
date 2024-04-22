@@ -209,18 +209,18 @@ export class OverwatchConstruct extends Construct {
       domainName: 'os-logs-domain',
       enableAutoSoftwareUpdate: true,
       capacity: {
-        dataNodes: 2,
+        dataNodes: 1,
         dataNodeInstanceType: 'm5.large.search',
-        masterNodes: 2,
-        masterNodeInstanceType: 'm5.large.search',
-        warmNodes: 2,
-        warmInstanceType: 'ultrawarm1.medium.search',
+        // masterNodes: 2,
+        // masterNodeInstanceType: 'm5.large.search',
+        // warmNodes: 2,
+        // warmInstanceType: 'ultrawarm1.medium.search',
         multiAzWithStandbyEnabled: false,
       },
-      zoneAwareness: {
-        enabled: true,
-        availabilityZoneCount: 2,
-      },
+      // zoneAwareness: {
+      //   enabled: true,
+      //   availabilityZoneCount: 2,
+      // },
       ebs: {
         volumeSize: 10, // GiB
         volumeType: EbsDeviceVolumeType.GENERAL_PURPOSE_SSD_GP3,
