@@ -31,10 +31,10 @@ export class OverwatchConstruct extends Construct {
       deadLetterQueue,
     });
 
-    // S3 Bucket for logs storage
+    // S3 Bucket for log events storage
     const logsBucket = this.createLogsBucket(mainTarget);
 
-    // Create and configure CloudTrail
+    // Create and configure CloudTrail for s3 logs events
     this.setupCloudTrail(logsBucket);
 
     // Create OpenSearch Domain
@@ -49,7 +49,7 @@ export class OverwatchConstruct extends Construct {
     esRole.node.addDependency(domain);
     esRole.node.addDependency(logsBucket);
 
-    //Attach policies to the main function
+    //Attach policies to the Lambda function
     this.attachPolicies(mainFunction, esRole.roleArn);
     mainFunction.node.addDependency(esRole);
 
@@ -59,6 +59,10 @@ export class OverwatchConstruct extends Construct {
       `https://${domain.domainEndpoint}`
     );
     mainFunction.addEnvironment('OSIS_ROLE_ARN', esRole.roleArn);
+    mainFunction.addEnvironment(
+      'OS_REGION',
+      process.env.CDK_DEFAULT_REGION || ''
+    );
   }
 
   private createLogsBucket(mainTarget: LambdaFunction): Bucket {
@@ -205,7 +209,7 @@ export class OverwatchConstruct extends Construct {
     // Create OpenSearch Domain
     const domain = new Domain(this, 'LogsOpenSearchDomain', {
       version: EngineVersion.OPENSEARCH_2_11,
-      removalPolicy: RemovalPolicy.DESTROY,
+      removalPolicy: RemovalPolicy.DESTROY, //TODO Change to RETAIN in Prod?
       domainName: 'os-logs-domain',
       enableAutoSoftwareUpdate: true,
       capacity: {

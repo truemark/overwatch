@@ -16,7 +16,7 @@ import {
 } from '@aws-sdk/client-cloudwatch-logs';
 
 // Constants for configuration
-const REGION = 'us-west-2';
+const REGION = process.env.OS_REGION || '';
 const osisClient = new OSISClient({region: REGION});
 const sqsClient = new SQSClient({region: REGION});
 const cwlClient = new CloudWatchLogsClient({region: REGION});
@@ -24,8 +24,13 @@ const cwlClient = new CloudWatchLogsClient({region: REGION});
 // Main handler function
 export async function handler(event: any): Promise<void> {
   const log = await initializeLogger();
-  log.trace().unknown('event', event).msg('Received S3 event');
+  log.trace().unknown('event', event).msg('Received S3 event'); //TODO: Remove for PROD deployment
 
+  //Validate region env var
+  if (!REGION) {
+    log.error().msg('Cannot find env var OS_REGION');
+    return;
+  }
   const {bucketName, objectKey} = extractBucketDetails(event);
   if (!bucketName || !objectKey) {
     log.error().msg('Missing bucket name or object key in the event detail');
