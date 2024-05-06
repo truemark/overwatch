@@ -252,8 +252,11 @@ log-pipeline:
         sts_role_arn: "${stsRoleArn}"
   processor:
     - parse_json:
+    - date:
+        from_time_received: true
+        destination: "ingest_timestamp"
     - delete_entries:
-        with_keys: [ "s3" ]
+        with_keys: ["s3"]
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]
