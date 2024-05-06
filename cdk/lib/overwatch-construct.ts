@@ -72,7 +72,10 @@ export class OverwatchConstruct extends Construct {
     logsBucket.addToResourcePolicy(
       new PolicyStatement({
         actions: ['s3:PutObject', 's3:PutObjectAcl'],
-        principals: [new AccountPrincipal('889335235414')], // TODO Parameter
+        principals: [
+          new AccountPrincipal('062758075735'), //VO Dev
+          new AccountPrincipal('348901320172'), //VO Prod
+        ], // TODO Parameter
         resources: [logsBucket.arnForObjects('*')],
       })
     );
