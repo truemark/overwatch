@@ -24,7 +24,7 @@ export class OverwatchConstruct extends Construct {
     // TODO Add AWS Managed Grafana
 
     // Lambda function to process the log event
-    const mainFunction = new MainFunction(this, 'MainFunctions');
+    const mainFunction = new MainFunction(this, 'MainFunction');
 
     const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
     const mainTarget = new LambdaFunction(mainFunction, {
