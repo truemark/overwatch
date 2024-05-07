@@ -20,6 +20,7 @@ const REGION = process.env.OS_REGION || '';
 const osisClient = new OSISClient({region: REGION});
 const sqsClient = new SQSClient({region: REGION});
 const cwlClient = new CloudWatchLogsClient({region: REGION});
+const https = require('https');
 
 // Main handler function
 export async function handler(event: any): Promise<void> {
@@ -82,6 +83,7 @@ async function ensurePipelineExists(
       .info()
       .str('pipelineName', pipelineName)
       .msg('Pipeline already exists.');
+    await createOrUpdateISMPolicy(log); //TODO to change the call location
   } catch (error) {
     if (error instanceof ResourceNotFoundException) {
       log
@@ -301,3 +303,190 @@ const createS3Notification = (event: any) => {
 
   return s3Notification;
 };
+
+async function createOrUpdateISMPolicy(log: any) {
+  const policyName = 'delete_logs_after_90_days';
+  const policy = {
+    policy: {
+      description: 'Manage index lifecycle',
+      default_state: 'hot',
+      states: [
+        {
+          name: 'hot',
+          actions: [],
+          transitions: [
+            {
+              state_name: 'delete',
+              conditions: {
+                min_index_age: '90d',
+              },
+            },
+          ],
+        },
+        {
+          name: 'delete',
+          actions: [
+            {
+              delete: {},
+            },
+          ],
+          transitions: [],
+        },
+      ],
+      ism_template: [
+        {
+          index_patterns: ['prod*'],
+          priority: 1,
+        },
+      ],
+    },
+  };
+
+  const opensearchHost = process.env.OS_ENDPOINT || '';
+  const policyPath = '/_plugins/_ism/policies/' + policyName;
+
+  //Fetch the existing policy version
+  const policyVersion: any = await fetchPolicy(opensearchHost, policyPath);
+
+  //Update the policy
+  await post(
+    opensearchHost,
+    policyPath,
+    policy,
+    policyVersion?.seq_no,
+    policyVersion?.primary_term,
+    (error: any, success: any) => {
+      if (error) {
+        log.error().err(error).msg('Failed to post ISM policy');
+      } else {
+        log.info().msg('ISM policy posted successfully');
+      }
+    }
+  );
+}
+
+async function post(
+  endpoint: string,
+  policyPath: string,
+  bodyObject: any,
+  seqNo: string | null | undefined,
+  primaryTerm: string | null | undefined,
+  callback: any
+) {
+  const body = JSON.stringify(bodyObject);
+
+  // Append versioning parameters only if both are available
+  if (seqNo != null && primaryTerm != null) {
+    policyPath += `?if_seq_no=${seqNo}&if_primary_term=${primaryTerm}`;
+  }
+
+  const requestParams = buildRequest(endpoint, policyPath, 'PUT', body);
+
+  const request = https
+    .request(requestParams, function (response: any) {
+      let responseBody = '';
+      response.on('data', (chunk: any) => {
+        responseBody += chunk;
+      });
+      response.on('end', () => {
+        try {
+          let success, error;
+
+          // Only try to parse if there's a response body to parse
+          if (responseBody) {
+            const info = JSON.parse(responseBody);
+
+            if (response.statusCode >= 200 && response.statusCode < 299) {
+              success = {
+                attemptedItems: 1,
+                successfulItems: info.errors ? 0 : 1,
+                failedItems: info.errors ? 1 : 0,
+              };
+            }
+
+            // Only consider it an error if info.errors is true or status code is not successful
+            if (response.statusCode !== 200 || info.errors === true) {
+              error = {statusCode: response.statusCode, responseBody: info};
+            }
+          } else {
+            // If there's no response body but it's a success code
+            if (response.statusCode >= 200 && response.statusCode < 299) {
+              success = {attemptedItems: 1, successfulItems: 1, failedItems: 0};
+            } else {
+              error = {
+                statusCode: response.statusCode,
+                responseBody: 'No response body',
+              };
+            }
+          }
+
+          callback(error, success, response.statusCode);
+        } catch (e: any) {
+          callback({
+            statusCode: 500,
+            responseBody: 'Error parsing response: ' + e.message,
+          });
+        }
+      });
+    })
+    .on('error', (e: any) => {
+      callback({statusCode: 500, responseBody: 'Network error: ' + e.message});
+    });
+
+  request.write(body);
+  request.end();
+}
+
+function buildRequest(
+  endpoint: string,
+  policyPath: string,
+  method: string,
+  body?: any
+) {
+  const parsedUrl = new URL(endpoint);
+  const base64Credentials = Buffer.from('logsadmin:Logs@admin1').toString(
+    'base64'
+  );
+
+  return {
+    hostname: parsedUrl.hostname,
+    port: parsedUrl.port || 443,
+    path: policyPath,
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${base64Credentials}`, //TODO to be change to SAML auth
+    },
+    ...(body ? {'Content-Length': Buffer.byteLength(body)} : {}),
+  };
+}
+
+async function fetchPolicy(endpoint: string, policyPath: string) {
+  return new Promise((resolve, reject) => {
+    const requestParams = buildRequest(endpoint, policyPath, 'GET');
+
+    const req = https.request(requestParams, (res: any) => {
+      let data = '';
+      res.on('data', (chunk: any) => (data += chunk));
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          // Policy found, parse it and return the version details
+          const response = JSON.parse(data);
+          resolve({
+            seq_no: response._seq_no,
+            primary_term: response._primary_term,
+          });
+        } else if (res.statusCode === 404) {
+          // Policy not found, resolve with null or a specific value to indicate absence
+          resolve(null);
+        } else {
+          // Other errors, handle accordingly
+          reject(new Error(`Failed to fetch policy: ${res.statusCode}`));
+        }
+      });
+    });
+
+    req.on('error', (error: any) => reject(error));
+    req.end();
+  });
+}

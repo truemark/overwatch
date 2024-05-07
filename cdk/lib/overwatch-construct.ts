@@ -24,7 +24,7 @@ export class OverwatchConstruct extends Construct {
     // TODO Add AWS Managed Grafana
 
     // Lambda function to process the log event
-    const mainFunction = new MainFunction(this, 'MainFunction');
+    const mainFunction = new MainFunction(this, 'MainFunctions');
 
     const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
     const mainTarget = new LambdaFunction(mainFunction, {
@@ -67,6 +67,7 @@ export class OverwatchConstruct extends Construct {
 
   private createLogsBucket(mainTarget: LambdaFunction): Bucket {
     const logsBucket = new Bucket(this, 'Logs', {
+      bucketName: 'overwatch-overwatchlogsf7d351c6-z9rixknklgby',
       encryption: BucketEncryption.S3_MANAGED,
     });
     logsBucket.addToResourcePolicy(
