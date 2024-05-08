@@ -67,7 +67,6 @@ export class OverwatchConstruct extends Construct {
 
   private createLogsBucket(mainTarget: LambdaFunction): Bucket {
     const logsBucket = new Bucket(this, 'Logs', {
-      //bucketName: 'overwatch-overwatchlogsf7d351c6-z9rixknklgby', //TODO remove hardcoded name value
       encryption: BucketEncryption.S3_MANAGED,
     });
     logsBucket.addToResourcePolicy(

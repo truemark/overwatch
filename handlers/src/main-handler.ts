@@ -141,7 +141,7 @@ async function createPipeline(
     MaxUnits: 5,
     PipelineConfigurationBody: pipelineConfigurationBody,
     LogPublishingOptions: {
-      IsLoggingEnabled: true,
+      IsLoggingEnabled: false,
       CloudWatchLogDestination: {
         LogGroup: logGroupName,
       },
@@ -262,7 +262,7 @@ log-pipeline:
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]
-        index: "${indexName}"
+        index: "${indexName}-%{yyyy.MM.dd}"
         index_type: "custom"
         template_content: |
           ${indexMapping}
