@@ -113,6 +113,7 @@ export class OverwatchConstruct extends Construct {
         'sqs:SetQueueAttributes',
         'sqs:GetQueueUrl',
         'sqs:SendMessage',
+        'iam:CreatePolicy',
       ],
       resources: ['*'],
     });

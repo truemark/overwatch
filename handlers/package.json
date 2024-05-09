@@ -15,8 +15,10 @@
   "dependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.540.0",
     "@aws-sdk/client-firehose": "^3.540.0",
+    "@aws-sdk/client-iam": "^3.572.0",
     "@aws-sdk/client-osis": "^3.554.0",
     "@aws-sdk/client-sqs": "^3.554.0",
+    "@aws-sdk/client-sts": "^3.572.0",
     "@aws-sdk/util-arn-parser": "^3.535.0",
     "@nr1e/logging": "^0.0.7"
   },

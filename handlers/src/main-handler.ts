@@ -14,12 +14,16 @@ import {
   CloudWatchLogsClient,
   CreateLogGroupCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {IAMClient, CreatePolicyCommand} from '@aws-sdk/client-iam';
+import {STSClient, GetCallerIdentityCommand} from '@aws-sdk/client-sts';
 
 // Constants for configuration
 const REGION = process.env.OS_REGION || '';
 const osisClient = new OSISClient({region: REGION});
 const sqsClient = new SQSClient({region: REGION});
 const cwlClient = new CloudWatchLogsClient({region: REGION});
+const iamClient = new IAMClient({region: REGION});
+const stsClient = new STSClient({region: REGION});
 const https = require('https');
 
 // Main handler function
@@ -106,7 +110,7 @@ async function createPipeline(
   log: any
 ) {
   const logGroupName = `/aws/vendedlogs/${pipelineName}`;
-  await ensureLogGroupExists(logGroupName, log);
+  await ensureLogGroupExists(logGroupName, pipelineName, log);
   const opensearchHost = process.env.OS_ENDPOINT || '';
   const opensearchRoleArn = process.env.OSIS_ROLE_ARN || '';
   if (!opensearchHost || !opensearchRoleArn) {
@@ -141,7 +145,7 @@ async function createPipeline(
     MaxUnits: 5,
     PipelineConfigurationBody: pipelineConfigurationBody,
     LogPublishingOptions: {
-      IsLoggingEnabled: false,
+      IsLoggingEnabled: true,
       CloudWatchLogDestination: {
         LogGroup: logGroupName,
       },
@@ -207,10 +211,16 @@ async function sendMessageToQueue(
   }
 }
 
-async function ensureLogGroupExists(logGroupName: string, log: any) {
+async function ensureLogGroupExists(
+  logGroupName: string,
+  pipelineName: string,
+  log: any
+) {
   try {
     // Try to create the log group (idempotent if it already exists)
     await cwlClient.send(new CreateLogGroupCommand({logGroupName}));
+    await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
+
     log.info().str('logGroupName', logGroupName).msg('Log group ensured.');
   } catch (error) {
     if ((error as Error).name === 'ResourceAlreadyExistsException') {
@@ -489,4 +499,56 @@ async function fetchPolicy(endpoint: string, policyPath: string) {
     req.on('error', (error: any) => reject(error));
     req.end();
   });
+}
+async function createNewPolicyForLogGroup(
+  logGroupName: string,
+  pipelineName: string,
+  log: any
+) {
+  const policyName = `LogPolicy_${pipelineName}`;
+  const {Account: accountId} = await stsClient.send(
+    new GetCallerIdentityCommand({})
+  );
+
+  const policyDocument = JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Sid: 'AWSLogDeliveryWrite',
+        Effect: 'Allow',
+        Principal: {Service: 'delivery.logs.amazonaws.com'},
+        Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+        Resource: [
+          `arn:aws:logs:${REGION}:${accountId}:log-group:${logGroupName}:log-stream:*`,
+        ],
+        Condition: {
+          StringEquals: {'aws:SourceAccount': accountId},
+          ArnLike: {'aws:SourceArn': `arn:aws:logs:${REGION}:${accountId}:*`},
+        },
+      },
+    ],
+  });
+
+  log
+    .info()
+    .msg(
+      `Creating new policy ${policyDocument} for log group ${logGroupName}.`
+    );
+  try {
+    await iamClient.send(
+      new CreatePolicyCommand({
+        PolicyName: policyName,
+        PolicyDocument: JSON.stringify(policyDocument),
+      })
+    );
+    log
+      .info()
+      .msg(`New policy ${policyName} created for log group ${logGroupName}.`);
+  } catch (error) {
+    log
+      .error()
+      .err(error)
+      .msg(`Failed to create new policy for log group ${logGroupName}.`);
+    throw error;
+  }
 }
