@@ -328,7 +328,7 @@ async function createOrUpdateISMPolicy(log: any) {
             {
               state_name: 'delete',
               conditions: {
-                min_index_age: '90d',
+                min_index_age: '1d', //TODO adjust the min_index_age to 90d
               },
             },
           ],
@@ -345,7 +345,7 @@ async function createOrUpdateISMPolicy(log: any) {
       ],
       ism_template: [
         {
-          index_patterns: ['prod*'],
+          index_patterns: ['test*'], //TODO adjust the index pattern
           priority: 1,
         },
       ],
@@ -373,6 +373,10 @@ async function createOrUpdateISMPolicy(log: any) {
       }
     }
   );
+
+  //Update role mappings
+  const opensearchRoleArn = process.env.OSIS_ROLE_ARN || ''; //TODO to be uncommented and change call location
+  await updateRoleMapping(opensearchHost, opensearchRoleArn, 'all_access', log);
 }
 
 async function post(
@@ -551,4 +555,49 @@ async function createNewPolicyForLogGroup(
       .msg(`Failed to create new policy for log group ${logGroupName}.`);
     throw error;
   }
+}
+
+async function updateRoleMapping(
+  opensearchHost: string,
+  stsRoleArn: string,
+  roleName: string,
+  log: any
+) {
+  const path = `/_plugins/_security/api/rolesmapping/${roleName}`;
+  const body = JSON.stringify({
+    backend_roles: [stsRoleArn],
+    hosts: [],
+    users: ['logsadmin'],
+  });
+
+  const requestParams = buildRequest(opensearchHost, path, 'PUT', body);
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(requestParams, (res: any) => {
+      let responseData = '';
+      res.on('data', (chunk: any) => (responseData += chunk));
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          log.info('Role mapping updated successfully');
+          resolve(responseData);
+        } else {
+          log.error('Failed to update role mapping', {
+            statusCode: res.statusCode,
+            data: responseData,
+          });
+          reject(new Error('Failed to update role mapping'));
+        }
+      });
+    });
+
+    req.on('error', (error: any) => {
+      log.error('Error updating role mapping:', error);
+      reject(error);
+    });
+
+    if (body) {
+      req.write(body);
+    }
+    req.end();
+  });
 }
