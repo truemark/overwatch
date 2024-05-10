@@ -16,6 +16,7 @@ import {Rule} from 'aws-cdk-lib/aws-events';
 import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
 import {LambdaFunction} from 'aws-cdk-lib/aws-events-targets';
 import {Trail, ReadWriteType} from 'aws-cdk-lib/aws-cloudtrail';
+import {SecretValue} from 'aws-cdk-lib/core';
 
 export class OverwatchConstruct extends Construct {
   constructor(scope: Construct, id: string) {
@@ -210,6 +211,8 @@ export class OverwatchConstruct extends Construct {
   }
 
   private createOpenSearchDomain(): Domain {
+    const masterUserPassword = SecretValue.unsafePlainText('Logs@admin1'); //TODO Change to be removed for SAML
+
     // Create OpenSearch Domain
     const domain = new Domain(this, 'LogsOpenSearchDomain', {
       version: EngineVersion.OPENSEARCH_2_11,
@@ -248,6 +251,7 @@ export class OverwatchConstruct extends Construct {
       enableVersionUpgrade: true,
       fineGrainedAccessControl: {
         masterUserName: 'logsadmin',
+        masterUserPassword: masterUserPassword,
       },
     });
 
