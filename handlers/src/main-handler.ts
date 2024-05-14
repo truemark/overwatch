@@ -13,17 +13,13 @@ import {initialize} from '@nr1e/logging';
 import {
   CloudWatchLogsClient,
   CreateLogGroupCommand,
+  PutResourcePolicyCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import {IAMClient, CreatePolicyCommand} from '@aws-sdk/client-iam';
 import {STSClient, GetCallerIdentityCommand} from '@aws-sdk/client-sts';
 
 // Constants for configuration
 const REGION = process.env.OS_REGION || '';
-const osisClient = new OSISClient({region: REGION});
 const sqsClient = new SQSClient({region: REGION});
-const cwlClient = new CloudWatchLogsClient({region: REGION});
-const iamClient = new IAMClient({region: REGION});
-const stsClient = new STSClient({region: REGION});
 const https = require('https');
 
 // Main handler function
@@ -81,6 +77,8 @@ async function ensurePipelineExists(
   queueUrl: string,
   log: any
 ) {
+  const osisClient = new OSISClient({region: REGION});
+
   try {
     await osisClient.send(new GetPipelineCommand({PipelineName: pipelineName}));
     log
@@ -154,9 +152,10 @@ async function createPipeline(
       PersistentBufferEnabled: false,
     },
   };
+  const osisClient = new OSISClient({region: REGION});
 
   try {
-    const response = await osisClient.send(new CreatePipelineCommand(input));
+    await osisClient.send(new CreatePipelineCommand(input));
     log
       .info()
       .str('pipelineName', pipelineName)
@@ -216,6 +215,8 @@ async function ensureLogGroupExists(
   pipelineName: string,
   log: any
 ) {
+  const cwlClient = new CloudWatchLogsClient({region: REGION});
+
   try {
     // Try to create the log group (idempotent if it already exists)
     await cwlClient.send(new CreateLogGroupCommand({logGroupName}));
@@ -224,6 +225,9 @@ async function ensureLogGroupExists(
     log.info().str('logGroupName', logGroupName).msg('Log group ensured.');
   } catch (error) {
     if ((error as Error).name === 'ResourceAlreadyExistsException') {
+      //Always ensure policy is created
+      await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
+
       log
         .info()
         .str('logGroupName', logGroupName)
@@ -504,12 +508,16 @@ async function fetchPolicy(endpoint: string, policyPath: string) {
     req.end();
   });
 }
+
 async function createNewPolicyForLogGroup(
   logGroupName: string,
   pipelineName: string,
   log: any
 ) {
   const policyName = `LogPolicy_${pipelineName}`;
+  const stsClient = new STSClient({region: REGION});
+  const cwLogsClient = new CloudWatchLogsClient({});
+
   const {Account: accountId} = await stsClient.send(
     new GetCallerIdentityCommand({})
   );
@@ -518,7 +526,6 @@ async function createNewPolicyForLogGroup(
     Version: '2012-10-17',
     Statement: [
       {
-        Sid: 'AWSLogDeliveryWrite',
         Effect: 'Allow',
         Principal: {Service: 'delivery.logs.amazonaws.com'},
         Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
@@ -527,32 +534,34 @@ async function createNewPolicyForLogGroup(
         ],
         Condition: {
           StringEquals: {'aws:SourceAccount': accountId},
-          ArnLike: {'aws:SourceArn': `arn:aws:logs:${REGION}:${accountId}:*`},
+          ArnLike: {
+            'aws:SourceArn': `arn:aws:logs:${REGION}:${accountId}:log-group:${logGroupName}`,
+          },
         },
       },
     ],
   });
 
-  log
-    .info()
-    .msg(
-      `Creating new policy ${policyDocument} for log group ${logGroupName}.`
-    );
+  log.info().msg(`Creating new resource policy for log group ${logGroupName}.`);
   try {
-    await iamClient.send(
-      new CreatePolicyCommand({
-        PolicyName: policyName,
-        PolicyDocument: JSON.stringify(policyDocument),
+    await cwLogsClient.send(
+      new PutResourcePolicyCommand({
+        policyName: policyName,
+        policyDocument: policyDocument,
       })
     );
     log
       .info()
-      .msg(`New policy ${policyName} created for log group ${logGroupName}.`);
+      .msg(
+        `New resource policy ${policyName} created for log group ${logGroupName}.`
+      );
   } catch (error) {
     log
       .error()
       .err(error)
-      .msg(`Failed to create new policy for log group ${logGroupName}.`);
+      .msg(
+        `Failed to create new resource policy for log group ${logGroupName}.`
+      );
     throw error;
   }
 }
