@@ -65,7 +65,7 @@ export class OverwatchConstruct extends Construct {
       process.env.CDK_DEFAULT_REGION || ''
     );
   }
-
+  //TODO move to standard bucket construct
   private createLogsBucket(mainTarget: LambdaFunction): Bucket {
     const logsBucket = new Bucket(this, 'Logs', {
       encryption: BucketEncryption.S3_MANAGED,
@@ -233,7 +233,7 @@ export class OverwatchConstruct extends Construct {
       //   availabilityZoneCount: 2,
       // },
       ebs: {
-        volumeSize: 10, // GiB
+        volumeSize: 100, // GiB
         volumeType: EbsDeviceVolumeType.GENERAL_PURPOSE_SSD_GP3,
       },
       logging: {
