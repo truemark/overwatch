@@ -171,7 +171,7 @@ async function createQueueIfNeeded(
   indexName: string,
   log: any
 ): Promise<string> {
-  const queueName = `${indexName}-queue`;
+  const queueName = `overwatch-${indexName}-queue`;
   try {
     const {QueueUrl} = await sqsClient.send(
       new CreateQueueCommand({
@@ -179,6 +179,10 @@ async function createQueueIfNeeded(
         Attributes: {
           DelaySeconds: '0',
           MessageRetentionPeriod: '345600',
+        },
+        tags: {
+          'automation:url': 'https://github.com/truemark/overwatch',
+          'automation:component-id': 'overwatch',
         },
       })
     );
@@ -394,14 +398,14 @@ async function post(
   const body = JSON.stringify(bodyObject);
 
   // Append versioning parameters only if both are available
-  if (seqNo != null && primaryTerm != null) {
+  if (seqNo !== null && primaryTerm !== null) {
     policyPath += `?if_seq_no=${seqNo}&if_primary_term=${primaryTerm}`;
   }
 
   const requestParams = buildRequest(endpoint, policyPath, 'PUT', body);
 
   const request = https
-    .request(requestParams, function (response: any) {
+    .request(requestParams, (response: any) => {
       let responseBody = '';
       response.on('data', (chunk: any) => {
         responseBody += chunk;
@@ -461,6 +465,7 @@ function buildRequest(
   method: string,
   body?: any
 ) {
+  // eslint-disable-next-line node/no-unsupported-features/node-builtins
   const parsedUrl = new URL(endpoint);
   const base64Credentials = Buffer.from('logsadmin:Logs@admin1').toString(
     'base64'

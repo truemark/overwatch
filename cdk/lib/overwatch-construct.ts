@@ -1,5 +1,4 @@
 import {Construct} from 'constructs';
-import {Domain, EngineVersion} from 'aws-cdk-lib/aws-opensearchservice';
 import {
   AccountPrincipal,
   AnyPrincipal,
@@ -8,18 +7,27 @@ import {
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
-import {EbsDeviceVolumeType} from 'aws-cdk-lib/aws-ec2';
-import {CfnOutput, RemovalPolicy} from 'aws-cdk-lib';
+import {CfnOutput, RemovalPolicy, Stack} from 'aws-cdk-lib';
 import {Bucket, BucketEncryption} from 'aws-cdk-lib/aws-s3';
 import {MainFunction} from './main-function';
 import {Rule} from 'aws-cdk-lib/aws-events';
 import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
 import {LambdaFunction} from 'aws-cdk-lib/aws-events-targets';
-import {Trail, ReadWriteType} from 'aws-cdk-lib/aws-cloudtrail';
-import {SecretValue} from 'aws-cdk-lib/core';
+import {ReadWriteType, Trail} from 'aws-cdk-lib/aws-cloudtrail';
+import {HostedDomainNameProps, StandardDomain} from './standard-domain';
 
-export class OverwatchConstruct extends Construct {
-  constructor(scope: Construct, id: string) {
+export interface OverwatchProps {
+  readonly volumeSize?: number;
+  readonly masterUserArn: string;
+  readonly idpEntityId: string;
+  readonly idpMetadataContent: string;
+  readonly masterBackendRole: string;
+  readonly hostedDomainName?: HostedDomainNameProps;
+  readonly accountIds: string[];
+}
+
+export class Overwatch extends Construct {
+  constructor(scope: Construct, id: string, props: OverwatchProps) {
     super(scope, id);
 
     // TODO Add AWS Managed Grafana
@@ -33,13 +41,23 @@ export class OverwatchConstruct extends Construct {
     });
 
     // S3 Bucket for log events storage
-    const logsBucket = this.createLogsBucket(mainTarget);
+    const logsBucket = this.createLogsBucket(mainTarget, props.accountIds);
 
     // Create and configure CloudTrail for s3 logs events
     this.setupCloudTrail(logsBucket);
 
     // Create OpenSearch Domain
-    const domain = this.createOpenSearchDomain();
+    const domain = new StandardDomain(this, 'Domain', {
+      domainName: 'logs',
+      masterUserArn: props.masterUserArn,
+      idpEntityId: props.idpEntityId,
+      idpMetadataContent: props.idpMetadataContent,
+      masterBackendRole: props.masterBackendRole,
+      volumeSize: props.volumeSize,
+      // writeAccess: [new AccountRootPrincipal()], // TODO This didn't work.
+      writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
+      hostedDomainName: props.hostedDomainName,
+    });
 
     // Create an IAM Role with attached policies
     const esRole = this.createElasticsearchRole(
@@ -65,19 +83,22 @@ export class OverwatchConstruct extends Construct {
       process.env.CDK_DEFAULT_REGION || ''
     );
   }
-  //TODO move to standard bucket construct
-  private createLogsBucket(mainTarget: LambdaFunction): Bucket {
+
+  private createLogsBucket(
+    mainTarget: LambdaFunction,
+    accountIds: string[]
+  ): Bucket {
     const logsBucket = new Bucket(this, 'Logs', {
       encryption: BucketEncryption.S3_MANAGED,
+      bucketName: Stack.of(this).account + '-logs',
     });
     logsBucket.addToResourcePolicy(
       new PolicyStatement({
         actions: ['s3:PutObject', 's3:PutObjectAcl'],
-        principals: [
-          new AccountPrincipal('062758075735'), //VO Dev
-          new AccountPrincipal('348901320172'), //VO Prod
-        ], // TODO Parameter
-        resources: [logsBucket.arnForObjects('*')],
+        principals: accountIds.map(
+          accountId => new AccountPrincipal(accountId)
+        ),
+        resources: [logsBucket.arnForObjects('*')], // TODO This should be more restrictive
       })
     );
 
@@ -116,14 +137,14 @@ export class OverwatchConstruct extends Construct {
         'sqs:SendMessage',
         'logs:PutResourcePolicy',
       ],
-      resources: ['*'],
+      resources: ['*'], // TODO This should be more restrictive
     });
     mainFunction.addToRolePolicy(osisPolicy);
 
     const osisLogsPolicy = new PolicyStatement({
       effect: Effect.ALLOW,
       actions: ['logs:CreateLogDelivery'],
-      resources: ['*'],
+      resources: ['*'], // TODO This should be more restrictive
     });
     mainFunction.addToRolePolicy(osisLogsPolicy);
 
@@ -151,7 +172,7 @@ export class OverwatchConstruct extends Construct {
   }
 
   private createElasticsearchRole(domainArn: string, bucketArn: string): Role {
-    const role = new Role(this, 'ElasticsrchAccessRole', {
+    const role = new Role(this, 'AccessRole', {
       assumedBy: new ServicePrincipal('osis-pipelines.amazonaws.com'),
       description: 'Role to allow Elasticsearch domain operations',
     });
@@ -196,11 +217,17 @@ export class OverwatchConstruct extends Construct {
   }
 
   private setupCloudTrail(logsBucket: Bucket): void {
+    const bucket = new Bucket(this, 'CloudTrailBucket', {
+      encryption: BucketEncryption.S3_MANAGED,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+    bucket.grantReadWrite(new ServicePrincipal('cloudtrail.amazonaws.com'));
     const trail = new Trail(this, 'S3LogsTrail', {
-      trailName: 's3-logs-trail',
       isMultiRegionTrail: true,
       includeGlobalServiceEvents: true,
       sendToCloudWatchLogs: false,
+      bucket,
     });
 
     // Add S3 data event Selector for the logs bucket
@@ -208,82 +235,5 @@ export class OverwatchConstruct extends Construct {
       includeManagementEvents: false,
       readWriteType: ReadWriteType.WRITE_ONLY,
     });
-  }
-
-  private createOpenSearchDomain(): Domain {
-    const masterUserPassword = SecretValue.unsafePlainText('Logs@admin1'); //TODO Change to be removed for SAML
-
-    // Create OpenSearch Domain
-    const domain = new Domain(this, 'LogsOpenSearchDomain', {
-      version: EngineVersion.OPENSEARCH_2_11,
-      removalPolicy: RemovalPolicy.DESTROY, //TODO Change to RETAIN in Prod?
-      domainName: 'os-logs-domain',
-      enableAutoSoftwareUpdate: true,
-      capacity: {
-        dataNodes: 1,
-        dataNodeInstanceType: 'm5.large.search',
-        // masterNodes: 2,
-        // masterNodeInstanceType: 'm5.large.search',
-        // warmNodes: 2,
-        // warmInstanceType: 'ultrawarm1.medium.search',
-        multiAzWithStandbyEnabled: false,
-      },
-      // zoneAwareness: {
-      //   enabled: true,
-      //   availabilityZoneCount: 2,
-      // },
-      ebs: {
-        volumeSize: 100, // GiB
-        volumeType: EbsDeviceVolumeType.GENERAL_PURPOSE_SSD_GP3,
-      },
-      logging: {
-        slowSearchLogEnabled: true,
-        appLogEnabled: true,
-        slowIndexLogEnabled: true,
-        auditLogEnabled: true,
-      },
-      encryptionAtRest: {
-        enabled: true,
-      },
-      nodeToNodeEncryption: true,
-      enforceHttps: true,
-      useUnsignedBasicAuth: false,
-      enableVersionUpgrade: true,
-      fineGrainedAccessControl: {
-        masterUserName: 'logsadmin',
-        masterUserPassword: masterUserPassword,
-      },
-    });
-
-    // Create an IAM Role for OpenSearch Ingestion
-    const ingestionRole = new Role(this, 'OpenSearchIngestionRole', {
-      assumedBy: new ServicePrincipal('osis.amazonaws.com'),
-      description: 'Role for OpenSearch Ingestion',
-    });
-
-    // Attach policy to the role to allow writing to OpenSearch
-    ingestionRole.addToPolicy(
-      new PolicyStatement({
-        actions: ['es:ESHttpPost', 'es:ESHttpPut'],
-        resources: [domain.domainArn, `${domain.domainArn}/*`],
-      })
-    );
-
-    // TODO Currently allows all things to write to this
-    domain.addAccessPolicies(
-      new PolicyStatement({
-        actions: [
-          'es:ESHttpPost',
-          'es:ESHttpPut',
-          'es:ESHttpGet',
-          'es:ESHttpDelete',
-        ],
-        effect: Effect.ALLOW,
-        principals: [new AnyPrincipal(), ingestionRole],
-        resources: [domain.domainArn, `${domain.domainArn}/*`],
-      })
-    );
-
-    return domain;
   }
 }

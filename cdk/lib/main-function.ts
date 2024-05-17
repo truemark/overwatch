@@ -2,7 +2,7 @@ import {ExtendedNodejsFunction} from 'truemark-cdk-lib/aws-lambda';
 import {Construct} from 'constructs';
 import * as path from 'path';
 import {Duration} from 'aws-cdk-lib';
-import {Architecture} from 'aws-cdk-lib/aws-lambda';
+import {Architecture, Runtime} from 'aws-cdk-lib/aws-lambda';
 
 export class MainFunction extends ExtendedNodejsFunction {
   constructor(scope: Construct, id: string) {
@@ -17,6 +17,7 @@ export class MainFunction extends ExtendedNodejsFunction {
       ),
       architecture: Architecture.ARM_64,
       handler: 'handler',
+      runtime: Runtime.NODEJS_20_X,
       timeout: Duration.seconds(300),
       memorySize: 768,
     });
