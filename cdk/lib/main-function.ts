@@ -26,7 +26,20 @@ export class MainFunction extends ExtendedNodejsFunction {
     this.addToRolePolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,
-        actions: ['sqs:TagQueue'],
+        actions: [
+          'logs:CreateLogDelivery',
+          'logs:PutResourcePolicy',
+          'osis:CreatePipeline',
+          'osis:GetPipeline',
+          'osis:ListPipelines',
+          'osis:TagResource',
+          'osis:ValidatePipeline',
+          'sqs:CreateQueue',
+          'sqs:GetQueueUrl',
+          'sqs:SendMessage',
+          'sqs:SetQueueAttributes',
+          'sqs:TagQueue',
+        ],
         resources: ['*'],
       })
     );
