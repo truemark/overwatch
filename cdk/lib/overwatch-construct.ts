@@ -15,6 +15,7 @@ import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
 import {LambdaFunction} from 'aws-cdk-lib/aws-events-targets';
 import {ReadWriteType, Trail} from 'aws-cdk-lib/aws-cloudtrail';
 import {HostedDomainNameProps, StandardDomain} from './standard-domain';
+import {ResourcePolicy} from 'aws-cdk-lib/aws-logs';
 
 export interface OverwatchProps {
   readonly volumeSize?: number;
@@ -31,6 +32,25 @@ export class Overwatch extends Construct {
     super(scope, id);
 
     // TODO Add AWS Managed Grafana
+
+    new ResourcePolicy(this, 'ResourcePolicy', {
+      policyStatements: [
+        new PolicyStatement({
+          effect: Effect.ALLOW,
+          principals: [new ServicePrincipal('delivery.logs.amazonaws.com')],
+          actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+          resources: ['*'],
+          // TODO Need to restrict to the log group pattern in the region and account
+          // conditions: {
+          //   ArnLike: {
+          //     'aws:SourceArn': `arn:aws:logs:${Stack.of(this).region}:${
+          //       Stack.of(this).account
+          //     }:log-group:/aws/vendedlogs/*`,
+          //   },
+          // },
+        }),
+      ],
+    });
 
     // Lambda function to process the log event
     const mainFunction = new MainFunction(this, 'MainFunction');
@@ -125,24 +145,7 @@ export class Overwatch extends Construct {
   }
 
   private attachPolicies(mainFunction: MainFunction, esRoleArn: string): void {
-    const osisPolicy = new PolicyStatement({
-      effect: Effect.ALLOW,
-      actions: [
-        'osis:CreatePipeline',
-        'osis:ListPipelines',
-        'osis:GetPipeline',
-        'osis:ValidatePipeline',
-        'osis:TagResource',
-        'sqs:CreateQueue',
-        'sqs:SetQueueAttributes',
-        'sqs:GetQueueUrl',
-        'sqs:SendMessage',
-        'logs:PutResourcePolicy',
-      ],
-      resources: ['*'], // TODO This should be more restrictive
-    });
-    mainFunction.addToRolePolicy(osisPolicy);
-
+    // TODO Move to MainFunction
     const osisLogsPolicy = new PolicyStatement({
       effect: Effect.ALLOW,
       actions: ['logs:CreateLogDelivery'],

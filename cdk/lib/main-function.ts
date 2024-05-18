@@ -21,6 +21,9 @@ export class MainFunction extends ExtendedNodejsFunction {
       runtime: Runtime.NODEJS_20_X,
       timeout: Duration.seconds(300),
       memorySize: 768,
+      deploymentOptions: {
+        createDeployment: false,
+      },
     });
 
     this.addToRolePolicy(

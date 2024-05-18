@@ -224,13 +224,13 @@ async function ensureLogGroupExists(
   try {
     // Try to create the log group (idempotent if it already exists)
     await cwlClient.send(new CreateLogGroupCommand({logGroupName}));
-    await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
+    // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
 
     log.info().str('logGroupName', logGroupName).msg('Log group ensured.');
   } catch (error) {
     if ((error as Error).name === 'ResourceAlreadyExistsException') {
       //Always ensure policy is created
-      await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
+      // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
 
       log
         .info()
@@ -514,62 +514,62 @@ async function fetchPolicy(endpoint: string, policyPath: string) {
   });
 }
 
-async function createNewPolicyForLogGroup(
-  logGroupName: string,
-  pipelineName: string,
-  log: any
-) {
-  const policyName = `LogPolicy_${pipelineName}`;
-  const stsClient = new STSClient({region: REGION});
-  const cwLogsClient = new CloudWatchLogsClient({});
-
-  const {Account: accountId} = await stsClient.send(
-    new GetCallerIdentityCommand({})
-  );
-
-  const policyDocument = JSON.stringify({
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Effect: 'Allow',
-        Principal: {Service: 'delivery.logs.amazonaws.com'},
-        Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-        Resource: [
-          `arn:aws:logs:${REGION}:${accountId}:log-group:${logGroupName}:log-stream:*`,
-        ],
-        Condition: {
-          StringEquals: {'aws:SourceAccount': accountId},
-          ArnLike: {
-            'aws:SourceArn': `arn:aws:logs:${REGION}:${accountId}:log-group:${logGroupName}`,
-          },
-        },
-      },
-    ],
-  });
-
-  log.info().msg(`Creating new resource policy for log group ${logGroupName}.`);
-  try {
-    await cwLogsClient.send(
-      new PutResourcePolicyCommand({
-        policyName: policyName,
-        policyDocument: policyDocument,
-      })
-    );
-    log
-      .info()
-      .msg(
-        `New resource policy ${policyName} created for log group ${logGroupName}.`
-      );
-  } catch (error) {
-    log
-      .error()
-      .err(error)
-      .msg(
-        `Failed to create new resource policy for log group ${logGroupName}.`
-      );
-    throw error;
-  }
-}
+// async function createNewPolicyForLogGroup(
+//   logGroupName: string,
+//   pipelineName: string,
+//   log: any
+// ) {
+//   const policyName = `LogPolicy_${pipelineName}`;
+//   const stsClient = new STSClient({region: REGION});
+//   const cwLogsClient = new CloudWatchLogsClient({});
+//
+//   const {Account: accountId} = await stsClient.send(
+//     new GetCallerIdentityCommand({})
+//   );
+//
+//   const policyDocument = JSON.stringify({
+//     Version: '2012-10-17',
+//     Statement: [
+//       {
+//         Effect: 'Allow',
+//         Principal: {Service: 'delivery.logs.amazonaws.com'},
+//         Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+//         Resource: [
+//           `arn:aws:logs:${REGION}:${accountId}:log-group:${logGroupName}:log-stream:*`,
+//         ],
+//         Condition: {
+//           StringEquals: {'aws:SourceAccount': accountId},
+//           ArnLike: {
+//             'aws:SourceArn': `arn:aws:logs:${REGION}:${accountId}:log-group:${logGroupName}`,
+//           },
+//         },
+//       },
+//     ],
+//   });
+//
+//   log.info().msg(`Creating new resource policy for log group ${logGroupName}.`);
+//   try {
+//     await cwLogsClient.send(
+//       new PutResourcePolicyCommand({
+//         policyName: policyName,
+//         policyDocument: policyDocument,
+//       })
+//     );
+//     log
+//       .info()
+//       .msg(
+//         `New resource policy ${policyName} created for log group ${logGroupName}.`
+//       );
+//   } catch (error) {
+//     log
+//       .error()
+//       .err(error)
+//       .msg(
+//         `Failed to create new resource policy for log group ${logGroupName}.`
+//       );
+//     throw error;
+//   }
+// }
 
 async function updateRoleMapping(
   opensearchHost: string,
