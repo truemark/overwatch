@@ -3,6 +3,7 @@ import {Construct} from 'constructs';
 import * as path from 'path';
 import {Duration} from 'aws-cdk-lib';
 import {Architecture, Runtime} from 'aws-cdk-lib/aws-lambda';
+import {Effect, PolicyStatement} from 'aws-cdk-lib/aws-iam';
 
 export class MainFunction extends ExtendedNodejsFunction {
   constructor(scope: Construct, id: string) {
@@ -21,5 +22,13 @@ export class MainFunction extends ExtendedNodejsFunction {
       timeout: Duration.seconds(300),
       memorySize: 768,
     });
+
+    this.addToRolePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['sqs:TagQueue'],
+        resources: ['*'],
+      })
+    );
   }
 }
