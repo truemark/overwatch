@@ -99,6 +99,8 @@ export class Overwatch extends Construct {
           accountId => new AccountPrincipal(accountId)
         ),
         resources: [logsBucket.arnForObjects('*')], // TODO This should be more restrictive
+        effect: Effect.ALLOW,
+        conditions: {},
       })
     );
 
