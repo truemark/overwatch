@@ -1,6 +1,6 @@
 import {Construct} from 'constructs';
 import {
-  AccountPrincipal,
+  AccountPrincipal, AccountRootPrincipal,
   AnyPrincipal,
   Effect,
   PolicyStatement,
@@ -16,6 +16,7 @@ import {LambdaFunction} from 'aws-cdk-lib/aws-events-targets';
 import {ReadWriteType, Trail} from 'aws-cdk-lib/aws-cloudtrail';
 import {HostedDomainNameProps, StandardDomain} from './standard-domain';
 import {ResourcePolicy} from 'aws-cdk-lib/aws-logs';
+import {ConfigFunction} from './config-function';
 
 export interface OverwatchProps {
   readonly volumeSize?: number;
@@ -32,6 +33,10 @@ export class Overwatch extends Construct {
     super(scope, id);
 
     // TODO Add AWS Managed Grafana
+
+    const openSearchMasterRole = new Role(this, 'MasterRole', {
+      assumedBy: new AccountRootPrincipal(), // TODO Be more restrictive
+    });
 
     new ResourcePolicy(this, 'ResourcePolicy', {
       policyStatements: [
@@ -53,7 +58,9 @@ export class Overwatch extends Construct {
     });
 
     // Lambda function to process the log event
-    const mainFunction = new MainFunction(this, 'MainFunction');
+    const mainFunction = new MainFunction(this, 'MainFunction', {
+      openSearchMasterRole,
+    });
 
     const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
     const mainTarget = new LambdaFunction(mainFunction, {
@@ -69,7 +76,7 @@ export class Overwatch extends Construct {
     // Create OpenSearch Domain
     const domain = new StandardDomain(this, 'Domain', {
       domainName: 'logs',
-      masterUserArn: props.masterUserArn,
+      masterUserArn: openSearchMasterRole.roleArn,
       idpEntityId: props.idpEntityId,
       idpMetadataContent: props.idpMetadataContent,
       masterBackendRole: props.masterBackendRole,
@@ -94,14 +101,15 @@ export class Overwatch extends Construct {
 
     //Add Lambda environment variables
     mainFunction.addEnvironment(
-      'OS_ENDPOINT',
+      'OPEN_SEARCH_ENDPOINT',
       `https://${domain.domainEndpoint}`
     );
     mainFunction.addEnvironment('OSIS_ROLE_ARN', esRole.roleArn);
-    mainFunction.addEnvironment(
-      'OS_REGION',
-      process.env.CDK_DEFAULT_REGION || ''
-    );
+
+    new ConfigFunction(this, 'ConfigFunction', {
+      openSearchMasterRole: openSearchMasterRole,
+      openSearchEndpoint: domain.domainEndpoint,
+    });
   }
 
   private createLogsBucket(

@@ -9,53 +9,26 @@ import {
   CreateQueueCommand,
   SendMessageCommand,
 } from '@aws-sdk/client-sqs';
-import {initialize} from '@nr1e/logging';
+import * as logging from '@nr1e/logging';
 import {
   CloudWatchLogsClient,
   CreateLogGroupCommand,
-  PutResourcePolicyCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import {STSClient, GetCallerIdentityCommand} from '@aws-sdk/client-sts';
+import {getOpenSearchClient} from './open-search-helper';
 
 // Constants for configuration
-const REGION = process.env.OS_REGION || '';
-const sqsClient = new SQSClient({region: REGION});
-const https = require('https');
-
-// Main handler function
-export async function handler(event: any): Promise<void> {
-  const log = await initializeLogger();
-  log.trace().unknown('event', event).msg('Received S3 event'); //TODO: Remove for PROD deployment
-
-  //Validate region env var
-  if (!REGION) {
-    log.error().msg('Cannot find env var OS_REGION');
-    return;
-  }
-  const {bucketName, objectKey} = extractBucketDetails(event);
-  if (!bucketName || !objectKey) {
-    log.error().msg('Missing bucket name or object key in the event detail');
-    return;
-  }
-
-  const indexName = extractIndexName(objectKey);
-  const pipelineName = `ingestion-pipeline-${indexName}`;
-
-  const queueUrl = await createQueueIfNeeded(indexName, log);
-  const messageBody = createS3Notification(event);
-
-  await sendMessageToQueue(queueUrl, messageBody, log);
-  await ensurePipelineExists(pipelineName, indexName, queueUrl, log);
+const REGION = process.env.AWS_REGION!;
+const OPEN_SEARCH_MASTER_ROLE_ARN = process.env.OPEN_SEARCH_MASTER_ROLE_ARN!;
+if (!OPEN_SEARCH_MASTER_ROLE_ARN) {
+  throw new Error('Missing env var OPEN_SEARCH_MASTER_ROLE_ARN');
+}
+const OPEN_SEARCH_ENDPOINT = process.env.OPEN_SEARCH_ENDPOINT!;
+if (!OPEN_SEARCH_ENDPOINT) {
+  throw new Error('Missing env var OPEN_SEARCH_ENDPOINT');
 }
 
-// Initializes the logging service
-async function initializeLogger() {
-  return initialize({
-    svc: 'Overwatch',
-    name: 'main-handler',
-    level: 'trace',
-  });
-}
+const log = logging.getLogger('main-handler');
+const sqsClient = new SQSClient({});
 
 // Extracts bucket name and object key from the event
 function extractBucketDetails(event: any) {
@@ -109,14 +82,9 @@ async function createPipeline(
 ) {
   const logGroupName = `/aws/vendedlogs/${pipelineName}`;
   await ensureLogGroupExists(logGroupName, pipelineName, log);
-  const opensearchHost = process.env.OS_ENDPOINT || '';
   const opensearchRoleArn = process.env.OSIS_ROLE_ARN || '';
-  if (!opensearchHost || !opensearchRoleArn) {
-    log.error().msg('Cannot find env vars OS_ENDPOINT or OSIS_ROLE_ARN');
-    return;
-  }
   const pipelineConfigurationBody = generateLogPipelineYaml(
-    opensearchHost,
+    `https://${OPEN_SEARCH_ENDPOINT}`,
     indexName,
     REGION,
     opensearchRoleArn,
@@ -360,15 +328,17 @@ async function createOrUpdateISMPolicy(log: any) {
     },
   };
 
-  const opensearchHost = process.env.OS_ENDPOINT || '';
   const policyPath = '/_plugins/_ism/policies/' + policyName;
 
   //Fetch the existing policy version
-  const policyVersion: any = await fetchPolicy(opensearchHost, policyPath);
+  const policyVersion: any = await fetchPolicy(
+    OPEN_SEARCH_ENDPOINT,
+    policyPath
+  );
 
   //Update the policy
   await post(
-    opensearchHost,
+    OPEN_SEARCH_ENDPOINT,
     policyPath,
     policy,
     policyVersion?.seq_no,
@@ -384,7 +354,12 @@ async function createOrUpdateISMPolicy(log: any) {
 
   //Update role mappings
   const opensearchRoleArn = process.env.OSIS_ROLE_ARN || ''; //TODO to be uncommented and change call location
-  await updateRoleMapping(opensearchHost, opensearchRoleArn, 'all_access', log);
+  await updateRoleMapping(
+    OPEN_SEARCH_ENDPOINT,
+    opensearchRoleArn,
+    'all_access',
+    log
+  );
 }
 
 async function post(
@@ -404,59 +379,61 @@ async function post(
 
   const requestParams = buildRequest(endpoint, policyPath, 'PUT', body);
 
-  const request = https
-    .request(requestParams, (response: any) => {
-      let responseBody = '';
-      response.on('data', (chunk: any) => {
-        responseBody += chunk;
-      });
-      response.on('end', () => {
-        try {
-          let success, error;
-
-          // Only try to parse if there's a response body to parse
-          if (responseBody) {
-            const info = JSON.parse(responseBody);
-
-            if (response.statusCode >= 200 && response.statusCode < 299) {
-              success = {
-                attemptedItems: 1,
-                successfulItems: info.errors ? 0 : 1,
-                failedItems: info.errors ? 1 : 0,
-              };
-            }
-
-            // Only consider it an error if info.errors is true or status code is not successful
-            if (response.statusCode !== 200 || info.errors === true) {
-              error = {statusCode: response.statusCode, responseBody: info};
-            }
-          } else {
-            // If there's no response body but it's a success code
-            if (response.statusCode >= 200 && response.statusCode < 299) {
-              success = {attemptedItems: 1, successfulItems: 1, failedItems: 0};
-            } else {
-              error = {
-                statusCode: response.statusCode,
-                responseBody: 'No response body',
-              };
-            }
-          }
-
-          callback(error, success, response.statusCode);
-        } catch (e: any) {
-          callback({
-            statusCode: 500,
-            responseBody: 'Error parsing response: ' + e.message,
-          });
-        }
-      });
-    })
-    .on('error', (e: any) => {
-      callback({statusCode: 500, responseBody: 'Network error: ' + e.message});
-    });
-
-  request.write(body);
-  request.end();
+  const client = await getOpenSearchClient();
+  // TODO Execute commented out request below using client above
+  // const request = https
+  //   .request(requestParams, (response: any) => {
+  //     let responseBody = '';
+  //     response.on('data', (chunk: any) => {
+  //       responseBody += chunk;
+  //     });
+  //     response.on('end', () => {
+  //       try {
+  //         let success, error;
+  //
+  //         // Only try to parse if there's a response body to parse
+  //         if (responseBody) {
+  //           const info = JSON.parse(responseBody);
+  //
+  //           if (response.statusCode >= 200 && response.statusCode < 299) {
+  //             success = {
+  //               attemptedItems: 1,
+  //               successfulItems: info.errors ? 0 : 1,
+  //               failedItems: info.errors ? 1 : 0,
+  //             };
+  //           }
+  //
+  //           // Only consider it an error if info.errors is true or status code is not successful
+  //           if (response.statusCode !== 200 || info.errors === true) {
+  //             error = {statusCode: response.statusCode, responseBody: info};
+  //           }
+  //         } else {
+  //           // If there's no response body but it's a success code
+  //           if (response.statusCode >= 200 && response.statusCode < 299) {
+  //             success = {attemptedItems: 1, successfulItems: 1, failedItems: 0};
+  //           } else {
+  //             error = {
+  //               statusCode: response.statusCode,
+  //               responseBody: 'No response body',
+  //             };
+  //           }
+  //         }
+  //
+  //         callback(error, success, response.statusCode);
+  //       } catch (e: any) {
+  //         callback({
+  //           statusCode: 500,
+  //           responseBody: 'Error parsing response: ' + e.message,
+  //         });
+  //       }
+  //     });
+  //   })
+  //   .on('error', (e: any) => {
+  //     callback({statusCode: 500, responseBody: 'Network error: ' + e.message});
+  //   });
+  //
+  // request.write(body);
+  // request.end();
 }
 
 function buildRequest(
@@ -467,6 +444,7 @@ function buildRequest(
 ) {
   // eslint-disable-next-line node/no-unsupported-features/node-builtins
   const parsedUrl = new URL(endpoint);
+  // TODO Harcoding need to be fixed
   const base64Credentials = Buffer.from('logsadmin:Logs@admin1').toString(
     'base64'
   );
@@ -485,33 +463,34 @@ function buildRequest(
 }
 
 async function fetchPolicy(endpoint: string, policyPath: string) {
-  return new Promise((resolve, reject) => {
-    const requestParams = buildRequest(endpoint, policyPath, 'GET');
-
-    const req = https.request(requestParams, (res: any) => {
-      let data = '';
-      res.on('data', (chunk: any) => (data += chunk));
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          // Policy found, parse it and return the version details
-          const response = JSON.parse(data);
-          resolve({
-            seq_no: response._seq_no,
-            primary_term: response._primary_term,
-          });
-        } else if (res.statusCode === 404) {
-          // Policy not found, resolve with null or a specific value to indicate absence
-          resolve(null);
-        } else {
-          // Other errors, handle accordingly
-          reject(new Error(`Failed to fetch policy: ${res.statusCode}`));
-        }
-      });
-    });
-
-    req.on('error', (error: any) => reject(error));
-    req.end();
-  });
+  const client = await getOpenSearchClient();
+  // TODO Execute commented out request below using client above
+  // return new Promise((resolve, reject) => {
+  //   const requestParams = buildRequest(endpoint, policyPath, 'GET');
+  // const req = https.request(requestParams, (res: any) => {
+  //   let data = '';
+  //   res.on('data', (chunk: any) => (data += chunk));
+  //   res.on('end', () => {
+  //     if (res.statusCode === 200) {
+  //       // Policy found, parse it and return the version details
+  //       const response = JSON.parse(data);
+  //       resolve({
+  //         seq_no: response._seq_no,
+  //         primary_term: response._primary_term,
+  //       });
+  //     } else if (res.statusCode === 404) {
+  //       // Policy not found, resolve with null or a specific value to indicate absence
+  //       resolve(null);
+  //     } else {
+  //       // Other errors, handle accordingly
+  //       reject(new Error(`Failed to fetch policy: ${res.statusCode}`));
+  //     }
+  //   });
+  // });
+  //
+  // req.on('error', (error: any) => reject(error));
+  // req.end();
+  // });
 }
 
 // async function createNewPolicyForLogGroup(
@@ -586,32 +565,64 @@ async function updateRoleMapping(
 
   const requestParams = buildRequest(opensearchHost, path, 'PUT', body);
 
-  return new Promise((resolve, reject) => {
-    const req = https.request(requestParams, (res: any) => {
-      let responseData = '';
-      res.on('data', (chunk: any) => (responseData += chunk));
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          log.info('Role mapping updated successfully');
-          resolve(responseData);
-        } else {
-          log.error('Failed to update role mapping', {
-            statusCode: res.statusCode,
-            data: responseData,
-          });
-          reject(new Error('Failed to update role mapping'));
-        }
-      });
-    });
+  const client = await getOpenSearchClient();
+  // TODO Execute commented out request below using client above
+  // return new Promise((resolve, reject) => {
+  // const req = https.request(requestParams, (res: any) => {
+  //   let responseData = '';
+  //   res.on('data', (chunk: any) => (responseData += chunk));
+  //   res.on('end', () => {
+  //     if (res.statusCode >= 200 && res.statusCode < 300) {
+  //       log.info('Role mapping updated successfully');
+  //       resolve(responseData);
+  //     } else {
+  //       log.error('Failed to update role mapping', {
+  //         statusCode: res.statusCode,
+  //         data: responseData,
+  //       });
+  //       reject(new Error('Failed to update role mapping'));
+  //     }
+  //   });
+  // });
+  //
+  // req.on('error', (error: any) => {
+  //   log.error('Error updating role mapping:', error);
+  //   reject(error);
+  // });
+  //
+  // if (body) {
+  //   req.write(body);
+  // }
+  // req.end();
+  // });
+}
 
-    req.on('error', (error: any) => {
-      log.error('Error updating role mapping:', error);
-      reject(error);
-    });
-
-    if (body) {
-      req.write(body);
-    }
-    req.end();
+// Main handler function
+export async function handler(event: any): Promise<void> {
+  await logging.initialize({
+    svc: 'overwatch',
+    level: 'trace',
   });
+
+  log.trace().unknown('event', event).msg('Received S3 event'); //TODO: Remove for PROD deployment
+
+  //Validate region env var
+  if (!REGION) {
+    log.error().msg('Cannot find env var OS_REGION');
+    return;
+  }
+  const {bucketName, objectKey} = extractBucketDetails(event);
+  if (!bucketName || !objectKey) {
+    log.error().msg('Missing bucket name or object key in the event detail');
+    return;
+  }
+
+  const indexName = extractIndexName(objectKey);
+  const pipelineName = `ingestion-pipeline-${indexName}`;
+
+  const queueUrl = await createQueueIfNeeded(indexName, log);
+  const messageBody = createS3Notification(event);
+
+  await sendMessageToQueue(queueUrl, messageBody, log);
+  await ensurePipelineExists(pipelineName, indexName, queueUrl, log);
 }

@@ -3,10 +3,14 @@ import {Construct} from 'constructs';
 import * as path from 'path';
 import {Duration} from 'aws-cdk-lib';
 import {Architecture, Runtime} from 'aws-cdk-lib/aws-lambda';
-import {Effect, PolicyStatement} from 'aws-cdk-lib/aws-iam';
+import {Effect, PolicyStatement, Role} from 'aws-cdk-lib/aws-iam';
+
+export interface MainFunctionProps {
+  readonly openSearchMasterRole: Role;
+}
 
 export class MainFunction extends ExtendedNodejsFunction {
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, props: MainFunctionProps) {
     super(scope, id, {
       entry: path.join(
         __dirname,
@@ -23,6 +27,9 @@ export class MainFunction extends ExtendedNodejsFunction {
       memorySize: 768,
       deploymentOptions: {
         createDeployment: false,
+      },
+      environment: {
+        OPEN_SEARCH_MASTER_ROLE_ARN: props.openSearchMasterRole.roleArn,
       },
     });
 
@@ -46,5 +53,7 @@ export class MainFunction extends ExtendedNodejsFunction {
         resources: ['*'],
       })
     );
+
+    props.openSearchMasterRole.grantAssumeRole(this.grantPrincipal);
   }
 }
