@@ -8,6 +8,7 @@ import {Duration} from 'aws-cdk-lib';
 export interface ConfigFunctionProps {
   readonly openSearchMasterRole: Role;
   readonly openSearchEndpoint: string;
+  readonly openSearchAccessRole: Role;
 }
 
 export class ConfigFunction extends ExtendedNodejsFunction {
@@ -32,6 +33,7 @@ export class ConfigFunction extends ExtendedNodejsFunction {
       environment: {
         OPEN_SEARCH_MASTER_ROLE_ARN: props.openSearchMasterRole.roleArn,
         OPEN_SEARCH_ENDPOINT: `https://${props.openSearchEndpoint}`,
+        OPEN_SEARCH_ACCESS_ROLE_ARN: props.openSearchAccessRole.roleArn,
       },
     });
 

@@ -96,28 +96,29 @@ export class Overwatch extends Construct {
     );
 
     // Create an IAM Role with attached policies
-    const esRole = this.createElasticsearchRole(
+    const osAccessRole = this.createOpenSearchAccessRole(
       domain.domainArn,
       logsBucket.bucketArn
     );
 
-    esRole.node.addDependency(domain);
-    esRole.node.addDependency(logsBucket);
+    osAccessRole.node.addDependency(domain);
+    osAccessRole.node.addDependency(logsBucket);
 
     //Attach policies to the Lambda function
-    this.attachPolicies(mainFunction, esRole.roleArn);
-    mainFunction.node.addDependency(esRole);
+    this.attachPolicies(mainFunction, osAccessRole.roleArn);
+    mainFunction.node.addDependency(osAccessRole);
 
     //Add Lambda environment variables
     mainFunction.addEnvironment(
       'OPEN_SEARCH_ENDPOINT',
       `https://${domain.domainEndpoint}`
     );
-    mainFunction.addEnvironment('OSIS_ROLE_ARN', esRole.roleArn);
+    mainFunction.addEnvironment('OSIS_ROLE_ARN', osAccessRole.roleArn);
 
     new ConfigFunction(this, 'ConfigFunction', {
       openSearchMasterRole: openSearchMasterRole,
       openSearchEndpoint: domain.domainEndpoint,
+      openSearchAccessRole: osAccessRole,
     });
   }
 
@@ -193,7 +194,10 @@ export class Overwatch extends Construct {
     mainFunction.addToRolePolicy(osisIamPassPolicy);
   }
 
-  private createElasticsearchRole(domainArn: string, bucketArn: string): Role {
+  private createOpenSearchAccessRole(
+    domainArn: string,
+    bucketArn: string
+  ): Role {
     const role = new Role(this, 'AccessRole', {
       assumedBy: new ServicePrincipal('osis-pipelines.amazonaws.com'),
       description: 'Role to allow Elasticsearch domain operations',
@@ -204,7 +208,7 @@ export class Overwatch extends Construct {
       new PolicyStatement({
         effect: Effect.ALLOW,
         actions: ['es:DescribeDomain'],
-        resources: [`arn:aws:es:*:${process.env.CDK_DEFAULT_ACCOUNT}:domain/*`],
+        resources: [`arn:aws:es:*:${Stack.of(this).account}:domain/*`],
       }),
       new PolicyStatement({
         effect: Effect.ALLOW,
