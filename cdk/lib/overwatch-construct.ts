@@ -21,7 +21,6 @@ import {ConfigFunction} from './config-function';
 
 export interface OverwatchProps {
   readonly volumeSize?: number;
-  readonly masterUserArn: string;
   readonly idpEntityId: string;
   readonly idpMetadataContent: string;
   readonly masterBackendRole: string;

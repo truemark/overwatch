@@ -32,10 +32,6 @@ const hostedZoneId = app.node.tryGetContext('zoneId');
 if (!hostedZoneId) {
   throw new Error('Missing zoneId in context');
 }
-const masterUserArn = app.node.tryGetContext('masterUserArn');
-if (!masterUserArn) {
-  throw new Error('Missing masterUserArn in context');
-}
 const masterBackendRole = app.node.tryGetContext('masterBackendRole');
 if (!masterBackendRole) {
   throw new Error('Missing masterBackendRole in context');
@@ -48,7 +44,6 @@ accountIds = accountIds.split(',');
 
 new OverwatchStack(app, 'Overwatch', {
   volumeSize: 200,
-  masterUserArn,
   idpEntityId,
   idpMetadataContent,
   masterBackendRole,

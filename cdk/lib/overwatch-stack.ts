@@ -5,7 +5,6 @@ import {HostedDomainNameProps} from './standard-domain';
 
 export interface OverwatchStackProps extends ExtendedStackProps {
   readonly volumeSize?: number;
-  readonly masterUserArn: string;
   readonly idpEntityId: string;
   readonly idpMetadataContent: string;
   readonly masterBackendRole: string;
