@@ -14,7 +14,13 @@ import {
   CloudWatchLogsClient,
   CreateLogGroupCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import {getOpenSearchClient} from './open-search-helper';
+import {
+  getOpenSearchClient,
+  createSignedRequest,
+  executeSignedRequest,
+} from './open-search-helper';
+import {json} from 'node:stream/consumers';
+import {QueryParameterBag} from '@smithy/types';
 
 // Constants for configuration
 const REGION = process.env.AWS_REGION!;
@@ -304,7 +310,7 @@ async function createOrUpdateISMPolicy(log: any) {
             {
               state_name: 'delete',
               conditions: {
-                min_index_age: '1d', //TODO adjust the min_index_age to 90d
+                min_index_age: '1d',
               },
             },
           ],
@@ -321,36 +327,31 @@ async function createOrUpdateISMPolicy(log: any) {
       ],
       ism_template: [
         {
-          index_patterns: ['test*'], //TODO adjust the index pattern
+          index_patterns: ['test*'],
           priority: 1,
         },
       ],
     },
   };
 
-  const policyPath = '/_plugins/_ism/policies/' + policyName;
+  const policyPath = `/_plugins/_ism/policies/${policyName}`;
 
   //Fetch the existing policy version
   const policyVersion: any = await fetchPolicy(
     OPEN_SEARCH_ENDPOINT,
-    policyPath
+    policyPath,
+    log
   );
 
   //Update the policy
-  await post(
-    OPEN_SEARCH_ENDPOINT,
-    policyPath,
-    policy,
-    policyVersion?.seq_no,
-    policyVersion?.primary_term,
-    (error: any, success: any) => {
-      if (error) {
-        log.error().err(error).msg('Failed to post ISM policy');
-      } else {
-        log.info().msg('ISM policy posted successfully');
-      }
-    }
-  );
+  // await post(
+  //   OPEN_SEARCH_ENDPOINT,
+  //   policyPath,
+  //   policy,
+  //   policyVersion?.seq_no,
+  //   policyVersion?.primary_term,
+  //   log
+  // );
 
   //Update role mappings
   const opensearchRoleArn = process.env.OSIS_ROLE_ARN || ''; //TODO to be uncommented and change call location
@@ -366,74 +367,40 @@ async function post(
   endpoint: string,
   policyPath: string,
   bodyObject: any,
-  seqNo: string | null | undefined,
-  primaryTerm: string | null | undefined,
-  callback: any
-) {
-  const body = JSON.stringify(bodyObject);
-
+  seqNo: string,
+  primaryTerm: string,
+  log: any
+): Promise<any> {
   // Append versioning parameters only if both are available
+  const queryParams: QueryParameterBag = {};
   if (seqNo !== null && primaryTerm !== null) {
-    policyPath += `?if_seq_no=${seqNo}&if_primary_term=${primaryTerm}`;
+    queryParams.if_seq_no = seqNo;
+    queryParams.if_primary_term = primaryTerm;
   }
 
-  const requestParams = buildRequest(endpoint, policyPath, 'PUT', body);
+  try {
+    const signedRequest = await createSignedRequest(
+      endpoint,
+      policyPath,
+      'PUT',
+      bodyObject,
+      queryParams
+    );
+    const response = await executeSignedRequest(signedRequest);
+    const parsedResponse = JSON.parse(response);
 
-  const client = await getOpenSearchClient();
-  // TODO Execute commented out request below using client above
-  // const request = https
-  //   .request(requestParams, (response: any) => {
-  //     let responseBody = '';
-  //     response.on('data', (chunk: any) => {
-  //       responseBody += chunk;
-  //     });
-  //     response.on('end', () => {
-  //       try {
-  //         let success, error;
-  //
-  //         // Only try to parse if there's a response body to parse
-  //         if (responseBody) {
-  //           const info = JSON.parse(responseBody);
-  //
-  //           if (response.statusCode >= 200 && response.statusCode < 299) {
-  //             success = {
-  //               attemptedItems: 1,
-  //               successfulItems: info.errors ? 0 : 1,
-  //               failedItems: info.errors ? 1 : 0,
-  //             };
-  //           }
-  //
-  //           // Only consider it an error if info.errors is true or status code is not successful
-  //           if (response.statusCode !== 200 || info.errors === true) {
-  //             error = {statusCode: response.statusCode, responseBody: info};
-  //           }
-  //         } else {
-  //           // If there's no response body but it's a success code
-  //           if (response.statusCode >= 200 && response.statusCode < 299) {
-  //             success = {attemptedItems: 1, successfulItems: 1, failedItems: 0};
-  //           } else {
-  //             error = {
-  //               statusCode: response.statusCode,
-  //               responseBody: 'No response body',
-  //             };
-  //           }
-  //         }
-  //
-  //         callback(error, success, response.statusCode);
-  //       } catch (e: any) {
-  //         callback({
-  //           statusCode: 500,
-  //           responseBody: 'Error parsing response: ' + e.message,
-  //         });
-  //       }
-  //     });
-  //   })
-  //   .on('error', (e: any) => {
-  //     callback({statusCode: 500, responseBody: 'Network error: ' + e.message});
-  //   });
-  //
-  // request.write(body);
-  // request.end();
+    if (parsedResponse.status === 'OK') {
+      log
+        .info()
+        .str('response', response)
+        .msg('ISM policy updated successfully');
+    } else {
+      log.error().err(response).msg('Failed to update ISM policy');
+    }
+  } catch (e: any) {
+    log.error().err(e).msg('Error processing request');
+    throw new Error('Error processing request: ' + e.message);
+  }
 }
 
 function buildRequest(
@@ -462,35 +429,33 @@ function buildRequest(
   };
 }
 
-async function fetchPolicy(endpoint: string, policyPath: string) {
-  const client = await getOpenSearchClient();
-  // TODO Execute commented out request below using client above
-  // return new Promise((resolve, reject) => {
-  //   const requestParams = buildRequest(endpoint, policyPath, 'GET');
-  // const req = https.request(requestParams, (res: any) => {
-  //   let data = '';
-  //   res.on('data', (chunk: any) => (data += chunk));
-  //   res.on('end', () => {
-  //     if (res.statusCode === 200) {
-  //       // Policy found, parse it and return the version details
-  //       const response = JSON.parse(data);
-  //       resolve({
-  //         seq_no: response._seq_no,
-  //         primary_term: response._primary_term,
-  //       });
-  //     } else if (res.statusCode === 404) {
-  //       // Policy not found, resolve with null or a specific value to indicate absence
-  //       resolve(null);
-  //     } else {
-  //       // Other errors, handle accordingly
-  //       reject(new Error(`Failed to fetch policy: ${res.statusCode}`));
-  //     }
-  //   });
-  // });
-  //
-  // req.on('error', (error: any) => reject(error));
-  // req.end();
-  // });
+async function fetchPolicy(endpoint: string, policyPath: string, log: any) {
+  try {
+    const signedRequest = await createSignedRequest(
+      endpoint,
+      policyPath,
+      'GET'
+    );
+    const response = await executeSignedRequest(signedRequest);
+    const parsedResponse = JSON.parse(response);
+
+    if (response) {
+      return {
+        seq_no: parsedResponse._seq_no,
+        primary_term: parsedResponse._primary_term,
+      };
+    } else if (signedRequest.headers[':status'] === 404) {
+      // Policy not found, resolve with null or a specific value to indicate absence
+      return null;
+    } else {
+      // Other errors, handle accordingly
+      throw new Error(
+        `Failed to fetch policy: ${signedRequest.headers[':status']}`
+      );
+    }
+  } catch (error: any) {
+    throw new Error(`Error fetching policy: ${error.message}`);
+  }
 }
 
 // async function createNewPolicyForLogGroup(
@@ -557,44 +522,37 @@ async function updateRoleMapping(
   log: any
 ) {
   const path = `/_plugins/_security/api/rolesmapping/${roleName}`;
-  const body = JSON.stringify({
-    backend_roles: [stsRoleArn],
+  const body = {
+    backend_roles: [
+      stsRoleArn,
+      'arn:aws:iam::534914120180:role/Overwatch-MasterRole7C9FAFA5-jGxU2chJe0Ik',
+    ],
     hosts: [],
-    users: ['logsadmin'],
-  });
+  };
 
-  const requestParams = buildRequest(opensearchHost, path, 'PUT', body);
-
-  const client = await getOpenSearchClient();
-  // TODO Execute commented out request below using client above
-  // return new Promise((resolve, reject) => {
-  // const req = https.request(requestParams, (res: any) => {
-  //   let responseData = '';
-  //   res.on('data', (chunk: any) => (responseData += chunk));
-  //   res.on('end', () => {
-  //     if (res.statusCode >= 200 && res.statusCode < 300) {
-  //       log.info('Role mapping updated successfully');
-  //       resolve(responseData);
-  //     } else {
-  //       log.error('Failed to update role mapping', {
-  //         statusCode: res.statusCode,
-  //         data: responseData,
-  //       });
-  //       reject(new Error('Failed to update role mapping'));
-  //     }
-  //   });
-  // });
-  //
-  // req.on('error', (error: any) => {
-  //   log.error('Error updating role mapping:', error);
-  //   reject(error);
-  // });
-  //
-  // if (body) {
-  //   req.write(body);
-  // }
-  // req.end();
-  // });
+  const signedRequest = await createSignedRequest(
+    opensearchHost,
+    path,
+    'PUT',
+    body
+  );
+  try {
+    const response = await executeSignedRequest(signedRequest);
+    const parsedResponse = JSON.parse(response);
+    if (parsedResponse.status === 'OK') {
+      log
+        .info()
+        .str('response', response)
+        .msg('Role mapping updated successfully');
+      return response;
+    } else {
+      log.error().err(response).msg('Failed to update role mapping');
+      throw new Error('Failed to update role mapping');
+    }
+  } catch (error) {
+    log.error().err(error).msg('Failed to udpate role mapping');
+    throw error;
+  }
 }
 
 // Main handler function

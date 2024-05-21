@@ -1,6 +1,7 @@
 import {Construct} from 'constructs';
 import {
-  AccountPrincipal, AccountRootPrincipal,
+  AccountPrincipal,
+  AccountRootPrincipal,
   AnyPrincipal,
   Effect,
   PolicyStatement,
@@ -85,6 +86,15 @@ export class Overwatch extends Construct {
       writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
       hostedDomainName: props.hostedDomainName,
     });
+
+    // Attach the necessary permissions for ISM actions
+    openSearchMasterRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['es:*'],
+        resources: [domain.domainArn],
+      })
+    );
 
     // Create an IAM Role with attached policies
     const esRole = this.createElasticsearchRole(
