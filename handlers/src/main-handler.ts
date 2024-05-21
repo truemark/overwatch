@@ -15,7 +15,6 @@ import {
   CreateLogGroupCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {getOpenSearchClient} from './open-search-helper';
-import {json} from 'node:stream/consumers';
 
 // Constants for configuration
 const REGION = process.env.AWS_REGION!;
@@ -369,6 +368,7 @@ async function post(
   try {
     const client = await getOpenSearchClient();
 
+    // TODO Do not use http, please use the client directly and the functionality it provides
     const response = await client.http.put({
       path: policyPath,
       body: bodyObject,
@@ -405,6 +405,7 @@ async function fetchPolicy(
 
     log.info(`Making request to ${policyPath}`);
 
+    // TODO Do not use http, please use the client directly and the functionality it provides
     const response = await client.http.get({
       path: policyPath,
       headers: {
@@ -512,6 +513,7 @@ async function updateRoleMapping(
   try {
     const client = await getOpenSearchClient();
 
+    // TODO Do not use http, please use the client directly and the functionality it provides
     const response = await client.http.put({
       path: path,
       body: JSON.stringify(body),
