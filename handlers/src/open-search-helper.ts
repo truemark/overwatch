@@ -106,6 +106,12 @@ export interface RoleMappingUpdate {
   backend_roles: string[];
 }
 
+export interface IndexPatternConfig {
+  title: string;
+  timeFieldName?: string;
+  fields?: any;
+}
+
 export class OpenSearchClient extends Client {
   ism = {
     getPolicy: async (policyId: string): Promise<IsmPolicyVersion | null> => {
@@ -167,6 +173,27 @@ export class OpenSearchClient extends Client {
           hosts: mapping.hosts,
           users: mapping.users,
           backend_roles: mapping.backend_roles,
+        },
+      });
+    },
+  };
+
+  kib = {
+    createIndexPattern: async (
+      indexPatternId: string,
+      config: IndexPatternConfig
+    ): Promise<void> => {
+      const path = `/.kibana_1/_doc/index-pattern:${indexPatternId}`;
+      await this.transport.request({
+        method: 'PUT',
+        path,
+        body: {
+          type: 'index-pattern',
+          'index-pattern': {
+            title: config.title,
+            timeFieldName: config.timeFieldName,
+            fields: config.fields,
+          },
         },
       });
     },

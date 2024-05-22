@@ -14,7 +14,11 @@ import {
   CloudWatchLogsClient,
   CreateLogGroupCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import {getOpenSearchEndpoint} from './open-search-helper';
+import {
+  getOpenSearchEndpoint,
+  getOpenSearchClient,
+  OpenSearchClient,
+} from './open-search-helper';
 
 // Constants for configuration
 const REGION = process.env.AWS_REGION!;
@@ -50,7 +54,6 @@ async function ensurePipelineExists(
       .info()
       .str('pipelineName', pipelineName)
       .msg('Pipeline already exists.');
-    //await createOrUpdateISMPolicy(log); //TODO Uncomment and change the call location
   } catch (error) {
     if (error instanceof ResourceNotFoundException) {
       log
@@ -58,6 +61,10 @@ async function ensurePipelineExists(
         .str('pipelineName', pipelineName)
         .msg('Pipeline not found, creating new pipeline...');
       await createPipeline(pipelineName, indexName, queueUrl, log);
+
+      //Create index pattern
+      const client = await getOpenSearchClient();
+      await createIndexPattern(client, indexName);
     } else {
       log.error().err(error).msg('Error while checking pipeline existence');
       throw error;
@@ -240,7 +247,7 @@ log-pipeline:
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]
-        index: "${indexName}-%{yyyy.MM.dd}"
+        index: "logs-${indexName}-%{yyyy.MM.dd}"
         index_type: "custom"
         template_content: |
           ${indexMapping}
@@ -281,6 +288,34 @@ const createS3Notification = (event: any) => {
 
   return s3Notification;
 };
+
+async function createIndexPattern(client: OpenSearchClient, indexName: string) {
+  const indexPatternId = 'logs-' + indexName;
+  // Define the index pattern configuration
+  const indexPatternConfig = {
+    title: `${indexPatternId}-*`,
+    timeFieldName: 'ingest_timestamp',
+    fields: JSON.stringify([
+      {
+        name: '@ingest_timestamp',
+        type: 'date',
+        searchable: true,
+        aggregatable: true,
+      },
+    ]),
+  };
+
+  try {
+    // Create the index pattern
+    await client.kib.createIndexPattern(indexPatternId, indexPatternConfig);
+    log
+      .info()
+      .str('indexPatternId', indexPatternId)
+      .msg('Index pattern created');
+  } catch (error) {
+    log.error().err(error).msg('Error creating index pattern');
+  }
+}
 
 // Main handler function
 export async function handler(event: any): Promise<void> {
