@@ -293,7 +293,7 @@ async function createIndexPattern(client: OpenSearchClient, indexName: string) {
   const indexPatternId = 'logs-' + indexName;
   // Define the index pattern configuration
   const indexPatternConfig = {
-    title: `${indexPatternId}-*`,
+    title: `${indexPatternId}*`,
     timeFieldName: 'ingest_timestamp',
     fields: JSON.stringify([
       {
