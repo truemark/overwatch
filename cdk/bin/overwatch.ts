@@ -43,7 +43,7 @@ if (!accountIds) {
 accountIds = accountIds.split(',');
 
 new OverwatchStack(app, 'Overwatch', {
-  volumeSize: 200,
+  volumeSize: 400,
   idpEntityId,
   idpMetadataContent,
   masterBackendRole,
