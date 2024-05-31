@@ -28,7 +28,7 @@ async function createOrUpdateISMPolicy(client: OpenSearchClient) {
           {
             state_name: 'delete',
             conditions: {
-              min_index_age: '90d',
+              min_index_age: '5d', //TODO Change for 90 for Prod
             },
           },
         ],
