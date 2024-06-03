@@ -110,7 +110,7 @@ async function createPipeline(
     MaxUnits: 5,
     PipelineConfigurationBody: pipelineConfigurationBody,
     LogPublishingOptions: {
-      IsLoggingEnabled: true,
+      IsLoggingEnabled: false,
       CloudWatchLogDestination: {
         LogGroup: logGroupName,
       },
