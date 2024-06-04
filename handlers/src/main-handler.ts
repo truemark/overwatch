@@ -88,9 +88,11 @@ async function createPipeline(
     REGION,
     opensearchRoleArn,
     queueUrl,
+    // TODO We want to adjust the number of shards dynamically between a min and max value passed in as parameters
+    // TODO This means the code will need to handle updating already existing pipelines
     JSON.stringify({
       settings: {
-        number_of_shards: 2,
+        number_of_shards: 10,
         number_of_replicas: 0,
       },
       mappings: {
