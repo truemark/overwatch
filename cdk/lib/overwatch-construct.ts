@@ -84,6 +84,7 @@ export class Overwatch extends Construct {
       // writeAccess: [new AccountRootPrincipal()], // TODO This didn't work.
       writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
       hostedDomainName: props.hostedDomainName,
+      dataNodeInstanceType: 'r6g.xlarge.search',
     });
 
     // Attach the necessary permissions for ISM actions
