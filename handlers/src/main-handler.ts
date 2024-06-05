@@ -83,7 +83,7 @@ async function createPipeline(
   await ensureLogGroupExists(logGroupName, pipelineName, log);
   const opensearchRoleArn = process.env.OSIS_ROLE_ARN || '';
   const pipelineConfigurationBody = generateLogPipelineYaml(
-    `https://${getOpenSearchEndpoint()}`,
+    `${getOpenSearchEndpoint()}`,
     indexName,
     REGION,
     opensearchRoleArn,
