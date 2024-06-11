@@ -95,6 +95,8 @@ async function createPipeline(
         number_of_shards: 20,
         number_of_replicas: 0,
         refresh_interval: '30s',
+        'index.queries.cache.enabled': true,
+        'index.requests.cache.enable': true,
       },
       mappings: {
         properties: {
