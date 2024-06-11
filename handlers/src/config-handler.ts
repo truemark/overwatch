@@ -26,9 +26,29 @@ async function createOrUpdateISMPolicy(client: OpenSearchClient) {
         actions: [],
         transitions: [
           {
+            state_name: 'warm',
+            conditions: {
+              min_index_age: '1d',
+            },
+          },
+        ],
+      },
+      {
+        name: 'warm',
+        actions: [
+          {
+            warm_migration: {},
+            retry: {
+              count: 5,
+              delay: '1h',
+            },
+          },
+        ],
+        transitions: [
+          {
             state_name: 'delete',
             conditions: {
-              min_index_age: '5d', //TODO Change for 90 for Prod
+              min_index_age: '90d',
             },
           },
         ],

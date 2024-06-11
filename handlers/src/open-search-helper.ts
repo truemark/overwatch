@@ -54,6 +54,7 @@ export interface IsmPolicy {
   states: Array<{
     name: string;
     actions: Array<{
+      warm_migration: {};
       action_type: string;
       retry: {
         count: number;

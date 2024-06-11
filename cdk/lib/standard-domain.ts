@@ -58,7 +58,7 @@ export interface StandardDomainProps {
   /**
    * The number of warm nodes to create. Default is 0.
    */
-  readonly warnModes?: number;
+  readonly warmModes?: number;
 
   /**
    * The instance type for warm nodes. Default is ultrawarm1.medium.search.
@@ -191,7 +191,7 @@ export class StandardDomain extends Construct {
           props.masterNodeInstanceType ?? 'm6g.large.search',
         dataNodes: props.dataNodes ?? 2,
         dataNodeInstanceType: props.dataNodeInstanceType ?? 'r6g.large.search',
-        warmNodes: props.warnModes ?? 0,
+        warmNodes: props.warmModes ?? 0,
         warmInstanceType:
           props.warmNodeInstanceType ?? 'ultrawarm1.medium.search',
         multiAzWithStandbyEnabled: props.multiAzWithStandbyEnabled ?? false,
