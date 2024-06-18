@@ -15,7 +15,7 @@ dependencies:
     specifier: ^0.5.21
     version: 0.5.21
   truemark-cdk-lib:
-    specifier: ^1.11.0-alpha.17
+    specifier: ^1.11.0
     version: 1.11.0(@aws-cdk/aws-appsync-alpha@2.59.0-alpha.0)(@aws-cdk/aws-lambda-go-alpha@2.131.0-alpha.0)(@aws-cdk/aws-lambda-python-alpha@2.131.0-alpha.0)(@aws-cdk/aws-redshift-alpha@2.131.0-alpha.0)(aws-cdk-lib@2.132.0)(cdk-monitoring-constructs@7.1.1)(constructs@10.3.0)
 
 devDependencies:
