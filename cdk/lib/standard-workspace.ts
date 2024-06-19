@@ -56,17 +56,71 @@ export interface StandardWorkspaceProps {
  * Creates a standard AWS managed Grafana workspace.
  */
 export class StandardWorkspace extends ExtendedConstruct {
-  // readonly role: Role;
+  readonly role: Role;
   readonly workspace: CfnWorkspace;
   constructor(scope: Construct, id: string, props: StandardWorkspaceProps) {
     super(scope, id);
-    // this.role = new Role(this, 'Role', {
-    //   assumedBy: new ServicePrincipal('grafana.amazonaws.com'),
-    // });
-    // this.role.addManagedPolicy(
-    //   ManagedPolicy.fromAwsManagedPolicyName('CloudWatchReadOnlyAccess')
-    // );
-
+    this.role = new Role(this, 'Role', {
+      assumedBy: new ServicePrincipal('grafana.amazonaws.com'),
+    });
+    this.role.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          'organizations:ListAccountsForParent',
+          'organizations:ListOrganizationalUnitsForParent',
+        ],
+        resources: ['*'],
+      })
+    );
+    this.role.addManagedPolicy(
+      ManagedPolicy.fromAwsManagedPolicyName(
+        'service-role/AmazonGrafanaCloudWatchAccess'
+      )
+    );
+    this.role.addManagedPolicy(
+      ManagedPolicy.fromAwsManagedPolicyName(
+        'service-role/AmazonGrafanaAthenaAccess'
+      )
+    );
+    this.role.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          'es:ESHttpGet',
+          'es:DescribeElasticsearchDomains',
+          'es:ListDomainNames',
+        ],
+        resources: ['*'],
+      })
+    );
+    this.role.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['es:ESHttpPost'],
+        resources: [
+          'arn:aws:es:*:*:domain/*/_msearch*',
+          'arn:aws:es:*:*:domain/*/_opendistro/_ppl',
+        ],
+      })
+    );
+    this.role.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          'aps:ListWorkspaces',
+          'aps:DescribeWorkspace',
+          'aps:QueryMetrics',
+          'aps:GetLabels',
+          'aps:GetSeries',
+          'aps:GetMetricMetadata',
+        ],
+        resources: ['*'],
+      })
+    );
+    this.role.addManagedPolicy(
+      ManagedPolicy.fromAwsManagedPolicyName('AWSXrayReadOnlyAccess')
+    );
     this.workspace = new CfnWorkspace(this, id, {
       name: props?.name,
       description: props.description,
@@ -74,18 +128,14 @@ export class StandardWorkspace extends ExtendedConstruct {
       organizationalUnits: props?.organizationalUnits,
       authenticationProviders: ['AWS_SSO'],
       permissionType: 'SERVICE_MANAGED',
-      // roleArn: this.role.roleArn,
+      roleArn: this.role.roleArn,
       grafanaVersion: props?.version ?? DEFAULT_GRAFANA_VERSION,
       dataSources: [
-        // 'AMAZON_OPENSEARCH_SERVICE',
-        // 'ATHENA',
-        // 'CLOUDWATCH',
-        // 'PROMETHEUS',
-        // 'REDSHIFT',
-        // 'SITEWISE',
-        // 'TIMESTREAM',
-        // 'TWINMAKER',
-        // 'XRAY',
+        'AMAZON_OPENSEARCH_SERVICE',
+        'ATHENA',
+        'CLOUDWATCH',
+        'PROMETHEUS',
+        'XRAY',
       ],
     });
     const instructions = [];
