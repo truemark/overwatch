@@ -41,6 +41,20 @@ if (!accountIds) {
   throw new Error('Missing accountIds in context');
 }
 accountIds = accountIds.split(',');
+let adminGroups = app.node.tryGetContext('adminGroups');
+if (adminGroups) {
+  adminGroups = adminGroups.split(',');
+}
+let editorGroups = app.node.tryGetContext('editorGroups');
+if (editorGroups) {
+  editorGroups = editorGroups.split(',');
+}
+let organizationalUnits = app.node.tryGetContext('organizationalUnits');
+if (!organizationalUnits) {
+  throw new Error('Missing organizationalUnits in context');
+} else {
+  organizationalUnits = organizationalUnits.split(',');
+}
 
 new OverwatchStack(app, 'Overwatch', {
   volumeSize: 4096,
@@ -55,4 +69,7 @@ new OverwatchStack(app, 'Overwatch', {
     },
   },
   accountIds,
+  adminGroups,
+  editorGroups,
+  organizationalUnits,
 });

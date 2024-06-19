@@ -18,6 +18,7 @@ import {ReadWriteType, Trail} from 'aws-cdk-lib/aws-cloudtrail';
 import {HostedDomainNameProps, StandardDomain} from './standard-domain';
 import {ResourcePolicy} from 'aws-cdk-lib/aws-logs';
 import {ConfigFunction} from './config-function';
+import {StandardWorkspace} from './standard-workspace';
 
 export interface OverwatchProps {
   readonly volumeSize?: number;
@@ -26,13 +27,28 @@ export interface OverwatchProps {
   readonly masterBackendRole: string;
   readonly hostedDomainName?: HostedDomainNameProps;
   readonly accountIds: string[];
+  readonly skipGrafana?: boolean;
+  readonly organizationalUnits: string[];
+  readonly adminGroups?: string[];
+  readonly editorGroups?: string[];
 }
 
 export class Overwatch extends Construct {
   constructor(scope: Construct, id: string, props: OverwatchProps) {
     super(scope, id);
 
-    // TODO Add AWS Managed Grafana
+    if (!props.skipGrafana) {
+      const workspace = new StandardWorkspace(this, 'Grafana', {
+        name: 'Overwatch',
+        organizationalUnits: props.organizationalUnits,
+        adminGroups: props.adminGroups,
+        editorGroups: props.editorGroups,
+      });
+      // TODO Bring this back if org stuff isn't working
+      // workspace.addAssumeRole(
+      //   'arn:aws:iam::*:role/ObservabilityDataSourceRole'
+      // ); // TODO Role currently created by terraform-security to be moved to overwatch-support
+    }
 
     const openSearchMasterRole = new Role(this, 'MasterRole', {
       assumedBy: new AccountRootPrincipal(), // TODO Be more restrictive

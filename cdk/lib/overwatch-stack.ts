@@ -10,6 +10,9 @@ export interface OverwatchStackProps extends ExtendedStackProps {
   readonly masterBackendRole: string;
   readonly hostedDomainName?: HostedDomainNameProps;
   readonly accountIds: string[];
+  readonly organizationalUnits: string[];
+  readonly adminGroups?: string[];
+  readonly editorGroups?: string[];
 }
 
 export class OverwatchStack extends ExtendedStack {
