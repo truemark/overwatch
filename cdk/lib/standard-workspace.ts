@@ -2,6 +2,7 @@ import {Construct} from 'constructs';
 import {CfnWorkspace} from 'aws-cdk-lib/aws-grafana';
 import {
   Effect,
+  ManagedPolicy,
   PolicyStatement,
   Role,
   ServicePrincipal,
@@ -55,13 +56,16 @@ export interface StandardWorkspaceProps {
  * Creates a standard AWS managed Grafana workspace.
  */
 export class StandardWorkspace extends ExtendedConstruct {
-  readonly role: Role;
+  // readonly role: Role;
   readonly workspace: CfnWorkspace;
   constructor(scope: Construct, id: string, props: StandardWorkspaceProps) {
     super(scope, id);
-    this.role = new Role(this, 'Role', {
-      assumedBy: new ServicePrincipal('grafana.amazonaws.com'),
-    });
+    // this.role = new Role(this, 'Role', {
+    //   assumedBy: new ServicePrincipal('grafana.amazonaws.com'),
+    // });
+    // this.role.addManagedPolicy(
+    //   ManagedPolicy.fromAwsManagedPolicyName('CloudWatchReadOnlyAccess')
+    // );
 
     this.workspace = new CfnWorkspace(this, id, {
       name: props?.name,
@@ -70,8 +74,19 @@ export class StandardWorkspace extends ExtendedConstruct {
       organizationalUnits: props?.organizationalUnits,
       authenticationProviders: ['AWS_SSO'],
       permissionType: 'SERVICE_MANAGED',
-      roleArn: this.role.roleArn,
+      // roleArn: this.role.roleArn,
       grafanaVersion: props?.version ?? DEFAULT_GRAFANA_VERSION,
+      dataSources: [
+        // 'AMAZON_OPENSEARCH_SERVICE',
+        // 'ATHENA',
+        // 'CLOUDWATCH',
+        // 'PROMETHEUS',
+        // 'REDSHIFT',
+        // 'SITEWISE',
+        // 'TIMESTREAM',
+        // 'TWINMAKER',
+        // 'XRAY',
+      ],
     });
     const instructions = [];
     if (props.adminGroups && props.adminGroups.length > 0) {
@@ -138,22 +153,22 @@ export class StandardWorkspace extends ExtendedConstruct {
    *
    * @param statement the statement to add
    */
-  addToRolePolicy(statement: PolicyStatement) {
-    this.role.addToPolicy(statement);
-  }
+  // addToRolePolicy(statement: PolicyStatement) {
+  //   this.role.addToPolicy(statement);
+  // }
 
   /**
    * Adds a policy statement to the role used by Grafana allowing it to assume another role.
    *
    * @param role the role to allow grafana to assume
    */
-  addAssumeRole(...role: string[]) {
-    this.role.addToPolicy(
-      new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ['sts:AssumeRole'],
-        resources: role,
-      })
-    );
-  }
+  // addAssumeRole(...role: string[]) {
+  //   this.role.addToPolicy(
+  //     new PolicyStatement({
+  //       effect: Effect.ALLOW,
+  //       actions: ['sts:AssumeRole'],
+  //       resources: role,
+  //     })
+  //   );
+  // }
 }
