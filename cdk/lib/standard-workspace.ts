@@ -37,9 +37,9 @@ export interface StandardWorkspaceProps {
   readonly version?: string;
 
   /**
-   * Organizational units to allow the workspace to access.
+   * Organizational units to allow the workspace to access if using Organization access.
    */
-  readonly organizationalUnits: string[];
+  readonly organizationalUnits?: string[];
 
   /**
    * AWS Identity Center groups to add as editors to the workspace.
@@ -203,22 +203,22 @@ export class StandardWorkspace extends ExtendedConstruct {
    *
    * @param statement the statement to add
    */
-  // addToRolePolicy(statement: PolicyStatement) {
-  //   this.role.addToPolicy(statement);
-  // }
+  addToRolePolicy(statement: PolicyStatement) {
+    this.role.addToPolicy(statement);
+  }
 
   /**
    * Adds a policy statement to the role used by Grafana allowing it to assume another role.
    *
    * @param role the role to allow grafana to assume
    */
-  // addAssumeRole(...role: string[]) {
-  //   this.role.addToPolicy(
-  //     new PolicyStatement({
-  //       effect: Effect.ALLOW,
-  //       actions: ['sts:AssumeRole'],
-  //       resources: role,
-  //     })
-  //   );
-  // }
+  addAssumeRole(...role: string[]) {
+    this.role.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['sts:AssumeRole'],
+        resources: role,
+      })
+    );
+  }
 }
