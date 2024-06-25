@@ -31,6 +31,7 @@ export interface OverwatchProps {
   readonly organizationalUnits: string[];
   readonly adminGroups?: string[];
   readonly editorGroups?: string[];
+  readonly skipWorkspace?: boolean;
 }
 
 export class Overwatch extends Construct {

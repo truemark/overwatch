@@ -62,6 +62,14 @@ export class OverwatchStack extends ExtendedStack {
     } else {
       organizationalUnits = organizationalUnits.split(',');
     }
+    let skipGrafana = app.node.tryGetContext('skipGrafana');
+    if (skipGrafana) {
+      skipGrafana = skipGrafana === 'true';
+    }
+    let skipWorkspace = app.node.tryGetContext('skipWorkspace');
+    if (skipWorkspace) {
+      skipWorkspace = skipWorkspace === 'true';
+    }
     return {
       volumeSize,
       idpEntityId,
@@ -78,6 +86,8 @@ export class OverwatchStack extends ExtendedStack {
       adminGroups,
       editorGroups,
       organizationalUnits,
+      skipGrafana,
+      skipWorkspace,
     };
   }
 
