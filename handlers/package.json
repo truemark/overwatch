@@ -4,13 +4,13 @@
   "main": "main-handler.js",
   "scripts": {
     "build": "tsc",
-    "postbuild": "prettier --check . && gts lint",
+    "prebuild": "prettier --check . && gts lint",
     "watch": "tsc -w",
     "lint": "gts lint",
     "clean": "gts clean",
     "fix": "gts fix",
     "posttest": "npm run lint",
-    "makepretty": "prettier --write ."
+    "fmt": "prettier --write ."
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.540.0",
