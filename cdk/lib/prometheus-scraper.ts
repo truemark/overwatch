@@ -12,6 +12,7 @@ export interface PrometheusScraperProps {
 }
 
 export class PrometheusScraper extends Construct {
+  public readonly fargatePrometheus: StandardFargateService;
   constructor(scope: Construct, id: string, props: PrometheusScraperProps) {
     super(scope, id);
 
@@ -43,7 +44,7 @@ export class PrometheusScraper extends Construct {
       )
     );
     // use TrueMark's StandardFargateService
-    const fargateprometheus = new StandardFargateService(
+    this.fargatePrometheus = new StandardFargateService(
       this,
       'Prometheus-scraper',
       {
@@ -60,12 +61,12 @@ export class PrometheusScraper extends Construct {
         enableExecuteCommand: true,
       }
     );
-    fargateprometheus.taskDefinition.taskRole.addManagedPolicy(
+    this.fargatePrometheus.taskDefinition.taskRole.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName(
         'AmazonPrometheusRemoteWriteAccess'
       )
     );
-    fargateprometheus.taskDefinition.taskRole.addManagedPolicy(
+    this.fargatePrometheus.taskDefinition.taskRole.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ReadOnlyAccess')
     );
   }

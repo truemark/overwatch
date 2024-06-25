@@ -61,18 +61,6 @@ export class OverwatchSupportConstruct extends Construct {
     // Create Security group for Prometheus data to be scraped
     const vpc = props.vpc;
     // Create a security group within the VPC
-    const securityGroup = new SecurityGroup(this, 'PrometheusSecurityGroup', {
-      vpc,
-      securityGroupName: 'prometheus-sg',
-      description: 'Allow Prometheus scraping on port 9100 within the VPC',
-      allowAllOutbound: true,
-    });
-    // Allow inbound traffic on port 9100 from within the VPC
-    securityGroup.addIngressRule(
-      Peer.ipv4(vpc.vpcCidrBlock),
-      Port.tcp(9100),
-      'Allow Prometheus scraping'
-    );
 
     const nodeExporterServiceConfig = `
     [Unit]
@@ -200,10 +188,24 @@ export class OverwatchSupportConstruct extends Construct {
       vpc: vpc,
     });
     // Create Prometheus scraper
-    new PrometheusScraper(this, 'PrometheusScraper', {
+    const ecsPrometheus = new PrometheusScraper(this, 'PrometheusScraper', {
       cluster: cluster,
       workspace: prometheusWorkspace,
     });
+    const securityGroup = new SecurityGroup(this, 'PrometheusSecurityGroup', {
+      vpc,
+      securityGroupName: 'prometheus-sg',
+      description: 'Allow Prometheus scraping on port 9100 within the VPC',
+      allowAllOutbound: true,
+    });
+    // Allow inbound traffic on port 9100 from within the VPC
+    securityGroup.addIngressRule(
+      Peer.securityGroupId(
+        ecsPrometheus.fargatePrometheus.securityGroup.securityGroupId
+      ),
+      Port.tcp(9100),
+      'Allow Prometheus scraping'
+    );
     //   new PrometheusScraper();
     //
     //   // TODO Add role assignment for Grafana
