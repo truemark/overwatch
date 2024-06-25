@@ -101,7 +101,7 @@ export class Overwatch extends Construct {
       writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
       hostedDomainName: props.hostedDomainName,
       dataNodeInstanceType: 'r6g.2xlarge.search',
-      warmNodeInstanceType: 'ultrawarm1.large.search',
+      warmNodeInstanceType: 'ultrawarm1.medium.search',
       warmModes: 2,
       iops: 12288,
       throughput: 500,
