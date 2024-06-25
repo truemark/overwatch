@@ -83,6 +83,7 @@ export class StandardWorkspace extends ExtendedConstruct {
         'service-role/AmazonGrafanaAthenaAccess'
       )
     );
+
     this.role.addToPolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,
@@ -116,6 +117,13 @@ export class StandardWorkspace extends ExtendedConstruct {
           'aps:GetMetricMetadata',
         ],
         resources: ['*'],
+      })
+    );
+    this.role.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['sts:AssumeRole'],
+        resources: ['arn:aws:iam::*:role/ObservabilityDataSourceRole'],
       })
     );
     this.role.addManagedPolicy(
