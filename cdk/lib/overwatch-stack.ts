@@ -93,7 +93,10 @@ export class OverwatchStack extends ExtendedStack {
         masterBackendRole,
         hostedDomainName: {
           domainName,
-          zone: zoneName,
+          zone: {
+            zoneName,
+            hostedZoneId,
+          },
         },
         accountIds,
       };
