@@ -119,13 +119,6 @@ export class StandardWorkspace extends ExtendedConstruct {
         resources: ['*'],
       })
     );
-    this.role.addToPolicy(
-      new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ['sts:AssumeRole'],
-        resources: ['arn:aws:iam::*:role/ObservabilityDataSourceRole'],
-      })
-    );
     this.role.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName('AWSXrayReadOnlyAccess')
     );
