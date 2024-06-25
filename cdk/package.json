@@ -6,7 +6,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "postbuild": "prettier --check . && gts lint",
+    "prebuild": "prettier --check . && gts lint",
     "watch": "tsc -w",
     "test": "jest",
     "lint": "gts lint",
