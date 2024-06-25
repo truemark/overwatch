@@ -18,7 +18,7 @@ export class PrometheusScraper extends Construct {
 
     //Create the Docker image that will be used by the Task
     const asset = new DockerImageAsset(this, 'ServerImage', {
-      directory: join(__dirname, '..', '..'),
+      directory: join(__dirname, '..', '..', 'support'),
       file: 'Dockerfile',
       exclude: ['cdk'],
       platform: Platform.LINUX_ARM64,

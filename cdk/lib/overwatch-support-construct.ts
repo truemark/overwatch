@@ -78,7 +78,7 @@ export class OverwatchSupportConstruct extends Construct {
                   '..',
                   '..',
                   'support',
-                  'install_node_exporter.ps1'
+                  'node_exporter_install.ps1'
                 ),
                 'utf-8'
               )
@@ -99,7 +99,7 @@ export class OverwatchSupportConstruct extends Construct {
                   '..',
                   '..',
                   'support',
-                  'install_node_exporter.sh'
+                  'node_exporter_install.sh'
                 ),
                 'utf-8'
               )

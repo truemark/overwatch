@@ -1,4 +1,4 @@
-ARCH=$(uname -m),
+ARCH=$(uname -m)
 if [ "$ARCH" == "x86_64" ]; then
   NODE_EXPORTER_PACKAGE_URL='{{ NodeExporterPackageUrl }}'
 elif [ "$ARCH" == "aarch64" ]; then
