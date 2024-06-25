@@ -1,0 +1,10 @@
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=prometheus
+ExecStart=/etc/prometheus/node_exporter/node_exporter
+
+[Install]
+WantedBy=default.target
