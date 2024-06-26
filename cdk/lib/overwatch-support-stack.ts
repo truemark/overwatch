@@ -17,7 +17,7 @@ export interface OverwatchSupportStackProps extends ExtendedStackProps {
   readonly vpcId: string;
   readonly availabilityZones: string[];
   readonly privateSubnetIds: string[];
-  readonly trustedAccountList: string[];
+  readonly trustedAccounts: string[];
 }
 
 export class OverwatchSupportStack extends ExtendedStack {
@@ -28,7 +28,7 @@ export class OverwatchSupportStack extends ExtendedStack {
       new AccountAlarms(this, 'Alarms');
 
       const trustRelationships = new CompositePrincipal(
-        ...props.trustedAccountList.map(
+        ...props.trustedAccounts.map(
           accountId => new AccountPrincipal(accountId)
         )
       );
@@ -224,12 +224,17 @@ export class OverwatchSupportStack extends ExtendedStack {
     privateSubnetIds = privateSubnetIds
       .split(',')
       .map((id: string) => id.trim());
+    let trustedAccounts = app.node.tryGetContext('trustedAccounts');
+    if (!trustedAccounts) {
+      throw new Error('trustedAccounts is required in context');
+    }
+    trustedAccounts = trustedAccounts.split(',').map((id: string) => id.trim());
     return {
       primaryRegion,
       vpcId,
       availabilityZones,
       privateSubnetIds,
-      trustedAccountList,
+      trustedAccounts,
     };
   }
 
