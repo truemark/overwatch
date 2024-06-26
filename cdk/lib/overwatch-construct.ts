@@ -46,108 +46,111 @@ export class Overwatch extends Construct {
 
     // Grafana Setup
     if (props.grafanaConfig) {
-      const workspace = new StandardWorkspace(this, 'Grafana', {
-        name: 'Overwatch',
-        organizationalUnits: props.grafanaConfig.organizationalUnits,
-        adminGroups: props.grafanaConfig.adminGroups,
-        editorGroups: props.grafanaConfig.editorGroups,
-      });
-      workspace.addAssumeRole(
-        'arn:aws:iam::*:role/ObservabilityDataSourceRole'
-      );
+      this.grafanaSetup(props.grafanaConfig);
     }
 
     // OpenSearch Setup
     if (props.logsConfig) {
-      const openSearchMasterRole = new Role(this, 'MasterRole', {
-        assumedBy: new AccountRootPrincipal(), // TODO Be more restrictive
-      });
-      new ResourcePolicy(this, 'ResourcePolicy', {
-        policyStatements: [
-          new PolicyStatement({
-            effect: Effect.ALLOW,
-            principals: [new ServicePrincipal('delivery.logs.amazonaws.com')],
-            actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-            resources: ['*'],
-            // TODO Need to restrict to the log group pattern in the region and account
-            // conditions: {
-            //   ArnLike: {
-            //     'aws:SourceArn': `arn:aws:logs:${Stack.of(this).region}:${
-            //       Stack.of(this).account
-            //     }:log-group:/aws/vendedlogs/*`,
-            //   },
-            // },
-          }),
-        ],
-      });
-      // Lambda function to process the log event
-      const mainFunction = new MainFunction(this, 'MainFunction', {
-        openSearchMasterRole,
-      });
-      const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
-      const mainTarget = new LambdaFunction(mainFunction, {
-        deadLetterQueue,
-      });
+      this.logsSetup(props.logsConfig);
+    }
+  }
 
-      // S3 Bucket for log events storage
-      const logsBucket = this.createLogsBucket(
-        mainTarget,
-        props.logsConfig.accountIds
-      );
-
-      // Create and configure CloudTrail for s3 logs events
-      this.setupCloudTrail(logsBucket);
-
-      // Create OpenSearch Domain
-      const domain = new StandardDomain(this, 'Domain', {
-        domainName: 'logs',
-        masterUserArn: openSearchMasterRole.roleArn,
-        idpEntityId: props.logsConfig.idpEntityId,
-        idpMetadataContent: props.logsConfig.idpMetadataContent,
-        masterBackendRole: props.logsConfig.masterBackendRole,
-        volumeSize: props.logsConfig.volumeSize,
-        // writeAccess: [new AccountRootPrincipal()], // TODO This didn't work.
-        writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
-        hostedDomainName: props.logsConfig.hostedDomainName,
-        dataNodeInstanceType: 'r6g.2xlarge.search',
-        warmNodeInstanceType: 'ultrawarm1.medium.search',
-        warmModes: 2,
-        iops: 12288,
-        throughput: 500,
-      });
-      // Attach the necessary permissions for ISM actions
-      openSearchMasterRole.addToPolicy(
+  private logsSetup(logsConfig: LogsConfig): void {
+    const openSearchMasterRole = new Role(this, 'MasterRole', {
+      assumedBy: new AccountRootPrincipal(), // TODO Be more restrictive
+    });
+    new ResourcePolicy(this, 'ResourcePolicy', {
+      policyStatements: [
         new PolicyStatement({
           effect: Effect.ALLOW,
-          actions: ['es:*'],
-          resources: [domain.domainArn],
-        })
-      );
+          principals: [new ServicePrincipal('delivery.logs.amazonaws.com')],
+          actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+          resources: ['*'],
+          // TODO Need to restrict to the log group pattern in the region and account
+          // conditions: {
+          //   ArnLike: {
+          //     'aws:SourceArn': `arn:aws:logs:${Stack.of(this).region}:${
+          //       Stack.of(this).account
+          //     }:log-group:/aws/vendedlogs/*`,
+          //   },
+          // },
+        }),
+      ],
+    });
+    // Lambda function to process the log event
+    const mainFunction = new MainFunction(this, 'MainFunction', {
+      openSearchMasterRole,
+    });
+    const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
+    const mainTarget = new LambdaFunction(mainFunction, {
+      deadLetterQueue,
+    });
 
-      // Create an IAM Role with attached policies
-      const osAccessRole = this.createOpenSearchAccessRole(
-        domain.domainArn,
-        logsBucket.bucketArn
-      );
-      osAccessRole.node.addDependency(domain);
-      osAccessRole.node.addDependency(logsBucket);
+    // S3 Bucket for log events storage
+    const logsBucket = this.createLogsBucket(mainTarget, logsConfig.accountIds);
 
-      //Attach policies to the Lambda function
-      this.attachPolicies(mainFunction, osAccessRole.roleArn);
-      mainFunction.node.addDependency(osAccessRole);
+    // Create and configure CloudTrail for s3 logs events
+    this.setupCloudTrail(logsBucket);
 
-      //Add Lambda environment variables
-      mainFunction.addEnvironment(
-        'OPEN_SEARCH_ENDPOINT',
-        `https://${domain.domainEndpoint}`
-      );
-      mainFunction.addEnvironment('OSIS_ROLE_ARN', osAccessRole.roleArn);
-      new ConfigFunction(this, 'ConfigFunction', {
-        openSearchMasterRole: openSearchMasterRole,
-        openSearchEndpoint: domain.domainEndpoint,
-        openSearchAccessRole: osAccessRole,
-      });
-    }
+    // Create OpenSearch Domain
+    const domain = new StandardDomain(this, 'Domain', {
+      domainName: 'logs',
+      masterUserArn: openSearchMasterRole.roleArn,
+      idpEntityId: logsConfig.idpEntityId,
+      idpMetadataContent: logsConfig.idpMetadataContent,
+      masterBackendRole: logsConfig.masterBackendRole,
+      volumeSize: logsConfig.volumeSize,
+      // writeAccess: [new AccountRootPrincipal()], // TODO This didn't work.
+      writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
+      hostedDomainName: logsConfig.hostedDomainName,
+      dataNodeInstanceType: 'r6g.2xlarge.search',
+      warmNodeInstanceType: 'ultrawarm1.medium.search',
+      warmModes: 2,
+      iops: 12288,
+      throughput: 500,
+    });
+    // Attach the necessary permissions for ISM actions
+    openSearchMasterRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['es:*'],
+        resources: [domain.domainArn],
+      })
+    );
+
+    // Create an IAM Role with attached policies
+    const osAccessRole = this.createOpenSearchAccessRole(
+      domain.domainArn,
+      logsBucket.bucketArn
+    );
+    osAccessRole.node.addDependency(domain);
+    osAccessRole.node.addDependency(logsBucket);
+
+    //Attach policies to the Lambda function
+    this.attachPolicies(mainFunction, osAccessRole.roleArn);
+    mainFunction.node.addDependency(osAccessRole);
+
+    //Add Lambda environment variables
+    mainFunction.addEnvironment(
+      'OPEN_SEARCH_ENDPOINT',
+      `https://${domain.domainEndpoint}`
+    );
+    mainFunction.addEnvironment('OSIS_ROLE_ARN', osAccessRole.roleArn);
+    new ConfigFunction(this, 'ConfigFunction', {
+      openSearchMasterRole: openSearchMasterRole,
+      openSearchEndpoint: domain.domainEndpoint,
+      openSearchAccessRole: osAccessRole,
+    });
+  }
+
+  private grafanaSetup(grafanaConfig: GrafanaConfig): void {
+    const workspace = new StandardWorkspace(this, 'Grafana', {
+      name: 'Overwatch',
+      organizationalUnits: grafanaConfig.organizationalUnits,
+      adminGroups: grafanaConfig.adminGroups,
+      editorGroups: grafanaConfig.editorGroups,
+    });
+    workspace.addAssumeRole('arn:aws:iam::*:role/ObservabilityDataSourceRole');
   }
 
   private createLogsBucket(

@@ -122,7 +122,7 @@ export class StandardWorkspace extends ExtendedConstruct {
     this.role.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName('AWSXrayReadOnlyAccess')
     );
-    this.workspace = new CfnWorkspace(this, id, {
+    this.workspace = new CfnWorkspace(this, 'Grafana', {
       name: props?.name,
       description: props.description,
       accountAccessType: 'ORGANIZATION',
