@@ -7,7 +7,12 @@ import {
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
-import {AwsCustomResource, AwsSdkCall} from 'aws-cdk-lib/custom-resources';
+import {
+  AwsCustomResource,
+  AwsCustomResourcePolicy,
+  AwsSdkCall,
+  PhysicalResourceId,
+} from 'aws-cdk-lib/custom-resources';
 import {ExtendedConstruct} from 'truemark-cdk-lib/aws-cdk';
 import {Stack} from 'aws-cdk-lib';
 import * as crypto from 'crypto';
@@ -197,6 +202,37 @@ export class StandardWorkspace extends ExtendedConstruct {
             }),
           ],
         },
+      });
+
+      const updateConfigCall: AwsSdkCall = {
+        service: 'Grafana',
+        action: 'updateWorkspaceConfiguration',
+        parameters: {
+          workspaceId: this.workspace.ref,
+          configuration: JSON.stringify({
+            unifiedAlerting: {
+              enabled: true,
+            },
+            plugins: {
+              pluginAdminEnabled: true,
+            },
+          }),
+        },
+        physicalResourceId: PhysicalResourceId.of(
+          'UpdateWorkspaceConfiguration'
+        ),
+      };
+
+      new AwsCustomResource(this, 'UpdateWorkspaceConfiguration', {
+        policy: AwsCustomResourcePolicy.fromStatements([
+          new PolicyStatement({
+            actions: ['grafana:UpdateWorkspaceConfiguration'],
+            resources: ['*'],
+            effect: Effect.ALLOW,
+          }),
+        ]),
+        onCreate: updateConfigCall,
+        onUpdate: updateConfigCall,
       });
     }
   }
