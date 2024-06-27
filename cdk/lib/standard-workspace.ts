@@ -132,7 +132,6 @@ export class StandardWorkspace extends ExtendedConstruct {
       roleArn: this.role.roleArn,
       pluginAdminEnabled: true, // Needed for new alerting
       grafanaVersion: props?.version ?? DEFAULT_GRAFANA_VERSION,
-      unifiedAlerting: 'ENABLED',
       // Disabled temporarily until the plugin works better
       // dataSources: [
       //   'AMAZON_OPENSEARCH_SERVICE',
