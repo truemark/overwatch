@@ -16,6 +16,7 @@ export class MainFunction extends ExtendedNodejsFunction {
         __dirname,
         '..',
         '..',
+        '..',
         'handlers',
         'src',
         'main-handler.ts'

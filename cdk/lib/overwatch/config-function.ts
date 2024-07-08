@@ -18,6 +18,7 @@ export class ConfigFunction extends ExtendedNodejsFunction {
         __dirname,
         '..',
         '..',
+        '..',
         'handlers',
         'src',
         'config-handler.ts'

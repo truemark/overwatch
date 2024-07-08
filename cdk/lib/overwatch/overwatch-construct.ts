@@ -20,40 +20,45 @@ import {ResourcePolicy} from 'aws-cdk-lib/aws-logs';
 import {ConfigFunction} from './config-function';
 import {StandardWorkspace} from './standard-workspace';
 
-export interface OverwatchProps {
+export interface LogsConfig {
   readonly volumeSize?: number;
   readonly idpEntityId: string;
   readonly idpMetadataContent: string;
   readonly masterBackendRole: string;
   readonly hostedDomainName?: HostedDomainNameProps;
   readonly accountIds: string[];
-  readonly skipGrafana?: boolean;
+}
+
+export interface GrafanaConfig {
   readonly organizationalUnits: string[];
   readonly adminGroups?: string[];
   readonly editorGroups?: string[];
+}
+
+export interface OverwatchProps {
+  readonly logsConfig?: LogsConfig;
+  readonly grafanaConfig?: GrafanaConfig;
 }
 
 export class Overwatch extends Construct {
   constructor(scope: Construct, id: string, props: OverwatchProps) {
     super(scope, id);
 
-    if (!props.skipGrafana) {
-      const workspace = new StandardWorkspace(this, 'Grafana', {
-        name: 'Overwatch',
-        organizationalUnits: props.organizationalUnits,
-        adminGroups: props.adminGroups,
-        editorGroups: props.editorGroups,
-      });
-      // TODO Bring this back if org stuff isn't working
-      // workspace.addAssumeRole(
-      //   'arn:aws:iam::*:role/ObservabilityDataSourceRole'
-      // ); // TODO Role currently created by terraform-security to be moved to overwatch-support
+    // Grafana Setup
+    if (props.grafanaConfig) {
+      this.grafanaSetup(props.grafanaConfig);
     }
 
+    // OpenSearch Setup
+    if (props.logsConfig) {
+      this.logsSetup(props.logsConfig);
+    }
+  }
+
+  private logsSetup(logsConfig: LogsConfig): void {
     const openSearchMasterRole = new Role(this, 'MasterRole', {
       assumedBy: new AccountRootPrincipal(), // TODO Be more restrictive
     });
-
     new ResourcePolicy(this, 'ResourcePolicy', {
       policyStatements: [
         new PolicyStatement({
@@ -72,19 +77,17 @@ export class Overwatch extends Construct {
         }),
       ],
     });
-
     // Lambda function to process the log event
     const mainFunction = new MainFunction(this, 'MainFunction', {
       openSearchMasterRole,
     });
-
     const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
     const mainTarget = new LambdaFunction(mainFunction, {
       deadLetterQueue,
     });
 
     // S3 Bucket for log events storage
-    const logsBucket = this.createLogsBucket(mainTarget, props.accountIds);
+    const logsBucket = this.createLogsBucket(mainTarget, logsConfig.accountIds);
 
     // Create and configure CloudTrail for s3 logs events
     this.setupCloudTrail(logsBucket);
@@ -93,20 +96,21 @@ export class Overwatch extends Construct {
     const domain = new StandardDomain(this, 'Domain', {
       domainName: 'logs',
       masterUserArn: openSearchMasterRole.roleArn,
-      idpEntityId: props.idpEntityId,
-      idpMetadataContent: props.idpMetadataContent,
-      masterBackendRole: props.masterBackendRole,
-      volumeSize: props.volumeSize,
+      idpEntityId: logsConfig.idpEntityId,
+      idpMetadataContent: logsConfig.idpMetadataContent,
+      masterBackendRole: logsConfig.masterBackendRole,
+      volumeSize: logsConfig.volumeSize,
       // writeAccess: [new AccountRootPrincipal()], // TODO This didn't work.
       writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
-      hostedDomainName: props.hostedDomainName,
-      dataNodeInstanceType: 'r6g.2xlarge.search',
-      warmNodeInstanceType: 'ultrawarm1.large.search',
-      warmModes: 2,
+      hostedDomainName: logsConfig.hostedDomainName,
+      dataNodeInstanceType: 'r6g.large.search',
+      dataNodes: 2,
+      //warmNodeInstanceType: 'ultrawarm1.medium.search',
+      //warmModes: 2,
+      warmModes: 0,
       iops: 12288,
       throughput: 500,
     });
-
     // Attach the necessary permissions for ISM actions
     openSearchMasterRole.addToPolicy(
       new PolicyStatement({
@@ -121,7 +125,6 @@ export class Overwatch extends Construct {
       domain.domainArn,
       logsBucket.bucketArn
     );
-
     osAccessRole.node.addDependency(domain);
     osAccessRole.node.addDependency(logsBucket);
 
@@ -135,12 +138,21 @@ export class Overwatch extends Construct {
       `https://${domain.domainEndpoint}`
     );
     mainFunction.addEnvironment('OSIS_ROLE_ARN', osAccessRole.roleArn);
-
     new ConfigFunction(this, 'ConfigFunction', {
       openSearchMasterRole: openSearchMasterRole,
       openSearchEndpoint: domain.domainEndpoint,
       openSearchAccessRole: osAccessRole,
     });
+  }
+
+  private grafanaSetup(grafanaConfig: GrafanaConfig): void {
+    const workspace = new StandardWorkspace(this, 'Grafana', {
+      name: 'Overwatch',
+      organizationalUnits: grafanaConfig.organizationalUnits,
+      adminGroups: grafanaConfig.adminGroups,
+      editorGroups: grafanaConfig.editorGroups,
+    });
+    workspace.addAssumeRole('arn:aws:iam::*:role/ObservabilityDataSourceRole');
   }
 
   private createLogsBucket(
