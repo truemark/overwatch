@@ -264,7 +264,12 @@ export class Overwatch extends Construct {
       }),
       new PolicyStatement({
         effect: Effect.ALLOW,
-        actions: ['s3:GetObject', 's3:ListBucket', 's3:DeleteObject'],
+        actions: [
+          's3:GetObject',
+          's3:ListBucket',
+          's3:DeleteObject',
+          's3:PutObject',
+        ],
         resources: [bucketArn, `${bucketArn}/*`],
       }),
     ];

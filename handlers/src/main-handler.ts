@@ -44,6 +44,7 @@ async function ensurePipelineExists(
   pipelineName: string,
   indexName: string,
   queueUrl: string,
+  bucketName: string,
   log: any
 ) {
   const osisClient = new OSISClient({region: REGION});
@@ -60,7 +61,7 @@ async function ensurePipelineExists(
         .info()
         .str('pipelineName', pipelineName)
         .msg('Pipeline not found, creating new pipeline...');
-      await createPipeline(pipelineName, indexName, queueUrl, log);
+      await createPipeline(pipelineName, indexName, queueUrl, bucketName, log);
 
       //Create index pattern
       const client = await getOpenSearchClient();
@@ -77,6 +78,7 @@ async function createPipeline(
   pipelineName: string,
   indexName: string,
   queueUrl: string,
+  bucketName: string,
   log: any
 ) {
   const logGroupName = `/aws/vendedlogs/${pipelineName}`;
@@ -87,6 +89,8 @@ async function createPipeline(
     indexName,
     REGION,
     opensearchRoleArn,
+    bucketName,
+    pipelineName,
     queueUrl,
     // TODO We want to adjust the number of shards dynamically between a min and max value passed in as parameters
     // TODO This means the code will need to handle updating already existing pipelines
@@ -221,6 +225,8 @@ function generateLogPipelineYaml(
   indexName: string,
   region: string,
   stsRoleArn: string,
+  bucketName: string,
+  pipelineName: string,
   queueUrl: string,
   indexMapping: string
 ) {
@@ -229,9 +235,10 @@ version: "2"
 log-pipeline:
   source:
     s3:
-      acknowledgments: true
+      acknowledgments: false
       notification_type: "sqs"
       compression: "gzip"
+      records_to_accumulate: 1000
       codec:
         newline:
       sqs:
@@ -254,12 +261,19 @@ log-pipeline:
         hosts: ["${opensearchHost}"]
         index: "logs-${indexName}-%{yyyy.MM.dd}"
         index_type: "custom"
+        bulk_size: 15
         template_content: |
           ${indexMapping}
         aws:
           serverless: false
           region: "${region}"
           sts_role_arn: "${stsRoleArn}"
+        dlq:
+          s3:
+            bucket: "${bucketName}"
+            key_path_prefix: "dlq/${pipelineName}"
+            region: "${region}"
+            sts_role_arn: "${stsRoleArn}"
 `;
 }
 
@@ -349,5 +363,11 @@ export async function handler(event: any): Promise<void> {
   const messageBody = createS3Notification(event);
 
   await sendMessageToQueue(queueUrl, messageBody, log);
-  await ensurePipelineExists(pipelineName, indexName, queueUrl, log);
+  await ensurePipelineExists(
+    pipelineName,
+    indexName,
+    queueUrl,
+    bucketName,
+    log
+  );
 }
