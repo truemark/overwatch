@@ -105,11 +105,8 @@ export class Overwatch extends Construct {
       hostedDomainName: logsConfig.hostedDomainName,
       dataNodeInstanceType: 'r6g.large.search',
       dataNodes: 2,
-      //warmNodeInstanceType: 'ultrawarm1.medium.search',
-      //warmModes: 2,
-      warmModes: 0,
-      iops: 12288,
-      throughput: 500,
+      iops: 3000,
+      throughput: 250,
     });
     // Attach the necessary permissions for ISM actions
     openSearchMasterRole.addToPolicy(

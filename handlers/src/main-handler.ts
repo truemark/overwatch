@@ -96,7 +96,7 @@ async function createPipeline(
     // TODO This means the code will need to handle updating already existing pipelines
     JSON.stringify({
       settings: {
-        number_of_shards: 20,
+        number_of_shards: 2,
         number_of_replicas: 0,
         refresh_interval: '30s',
         'index.queries.cache.enabled': true,
