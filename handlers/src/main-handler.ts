@@ -29,8 +29,8 @@ const sqsClient = new SQSClient({});
 // Extracts bucket name and object key from the event
 function extractBucketDetails(event: any) {
   return {
-    bucketName: event.detail.requestParameters.bucketName,
-    objectKey: event.detail.requestParameters.key,
+    bucketName: event.detail.bucket.name,
+    objectKey: event.detail.object.key,
   };
 }
 
@@ -200,14 +200,9 @@ async function ensureLogGroupExists(
   try {
     // Try to create the log group (idempotent if it already exists)
     await cwlClient.send(new CreateLogGroupCommand({logGroupName}));
-    // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
-
     log.info().str('logGroupName', logGroupName).msg('Log group ensured.');
   } catch (error) {
     if ((error as Error).name === 'ResourceAlreadyExistsException') {
-      //Always ensure policy is created
-      // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
-
       log
         .info()
         .str('logGroupName', logGroupName)
@@ -278,27 +273,27 @@ log-pipeline:
 }
 
 const createS3Notification = (event: any) => {
-  const eventData = event.detail;
-  const s3BucketArn = eventData.resources.find(
-    (resource: any) => resource.type === 'AWS::S3::Bucket'
-  ).ARN;
+  const s3BucketArn = event.resources.find(
+    (resource: string) =>
+      resource === `arn:aws:s3:::${event.detail.bucket.name}`
+  );
 
   const s3Notification = {
     Records: [
       {
         eventVersion: '2.1',
         eventSource: 'aws:s3',
-        awsRegion: eventData.awsRegion,
-        eventTime: eventData.eventTime,
+        awsRegion: event.region,
+        eventTime: event.time,
         eventName: 'ObjectCreated:Put',
         s3: {
           bucket: {
-            name: eventData.requestParameters.bucketName,
+            name: event.detail.bucket.name,
             arn: s3BucketArn,
           },
           object: {
-            key: eventData.requestParameters.key,
-            size: eventData.additionalEventData.bytesTransferredIn,
+            key: event.detail.object.key,
+            size: event.detail.object.size,
           },
         },
       },
@@ -310,7 +305,6 @@ const createS3Notification = (event: any) => {
 
 async function createIndexPattern(client: OpenSearchClient, indexName: string) {
   const indexPatternId = 'logs-' + indexName;
-  // Define the index pattern configuration
   const indexPatternConfig = {
     title: `${indexPatternId}*`,
     timeFieldName: 'ingest_timestamp',
@@ -325,7 +319,6 @@ async function createIndexPattern(client: OpenSearchClient, indexName: string) {
   };
 
   try {
-    // Create the index pattern
     await client.kib.createIndexPattern(indexPatternId, indexPatternConfig);
     log
       .info()
@@ -343,13 +336,16 @@ export async function handler(event: any): Promise<void> {
     level: 'trace',
   });
 
-  log.trace().unknown('event', event).msg('Received S3 event'); //TODO: Remove for PROD deployment
+  // Enable for debugging if needed
+  //log.trace().unknown('event', event).msg('Received S3 event');
 
-  //Validate region env var
+  // Validate region env var
   if (!REGION) {
     log.error().msg('Cannot find env var OS_REGION');
     return;
   }
+
+  // Extract bucket name and object key from the EventBridge event
   const {bucketName, objectKey} = extractBucketDetails(event);
   if (!bucketName || !objectKey) {
     log.error().msg('Missing bucket name or object key in the event detail');

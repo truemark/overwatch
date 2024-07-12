@@ -8,18 +8,16 @@ import {
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
-import {CfnOutput, RemovalPolicy, Stack} from 'aws-cdk-lib';
-import {Bucket, BucketEncryption} from 'aws-cdk-lib/aws-s3';
+import {CfnOutput, Duration, Stack} from 'aws-cdk-lib';
+import {Bucket, BucketEncryption, EventType} from 'aws-cdk-lib/aws-s3';
 import {MainFunction} from './main-function';
 import {Rule} from 'aws-cdk-lib/aws-events';
 import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
 import {LambdaFunction} from 'aws-cdk-lib/aws-events-targets';
-import {ReadWriteType, Trail} from 'aws-cdk-lib/aws-cloudtrail';
 import {HostedDomainNameProps, StandardDomain} from './standard-domain';
 import {ResourcePolicy} from 'aws-cdk-lib/aws-logs';
 import {ConfigFunction} from './config-function';
 import {StandardWorkspace} from './standard-workspace';
-
 export interface LogsConfig {
   readonly volumeSize?: number;
   readonly idpEntityId: string;
@@ -89,8 +87,8 @@ export class Overwatch extends Construct {
     // S3 Bucket for log events storage
     const logsBucket = this.createLogsBucket(mainTarget, logsConfig.accountIds);
 
-    // Create and configure CloudTrail for s3 logs events
-    this.setupCloudTrail(logsBucket);
+    // Setup EventBridge for S3 logs events
+    this.setupEventBridge(logsBucket, mainTarget);
 
     // Create OpenSearch Domain
     const domain = new StandardDomain(this, 'Domain', {
@@ -157,6 +155,7 @@ export class Overwatch extends Construct {
     accountIds: string[]
   ): Bucket {
     const logsBucket = new Bucket(this, 'Logs', {
+      eventBridgeEnabled: true,
       encryption: BucketEncryption.S3_MANAGED,
       bucketName: Stack.of(this).account + '-logs',
     });
@@ -172,20 +171,6 @@ export class Overwatch extends Construct {
       })
     );
 
-    const logsBucketRule = new Rule(this, 'LogsBucketRole', {
-      eventPattern: {
-        source: ['aws.s3'],
-        detailType: ['AWS API Call via CloudTrail'],
-        detail: {
-          eventName: ['PutObject'],
-          requestParameters: {
-            bucketName: [logsBucket.bucketName],
-          },
-        },
-      },
-      description: 'Routes S3 events to Overwatch',
-    });
-    logsBucketRule.addTarget(mainTarget);
     new CfnOutput(this, 'LogsBucketArn', {
       value: logsBucket.bucketArn,
     });
@@ -277,24 +262,22 @@ export class Overwatch extends Construct {
     return role;
   }
 
-  private setupCloudTrail(logsBucket: Bucket): void {
-    const bucket = new Bucket(this, 'CloudTrailBucket', {
-      encryption: BucketEncryption.S3_MANAGED,
-      removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+  private setupEventBridge(
+    logsBucket: Bucket,
+    mainTarget: LambdaFunction
+  ): void {
+    const logsBucketRule = new Rule(this, 'LogsBucketRule', {
+      eventPattern: {
+        source: ['aws.s3'],
+        detailType: ['Object Created'],
+        detail: {
+          bucket: {
+            name: [logsBucket.bucketName],
+          },
+        },
+      },
+      description: 'Routes S3 events to Overwatch',
     });
-    bucket.grantReadWrite(new ServicePrincipal('cloudtrail.amazonaws.com'));
-    const trail = new Trail(this, 'S3LogsTrail', {
-      isMultiRegionTrail: true,
-      includeGlobalServiceEvents: true,
-      sendToCloudWatchLogs: false,
-      bucket,
-    });
-
-    // Add S3 data event Selector for the logs bucket
-    trail.addS3EventSelector([{bucket: logsBucket}], {
-      includeManagementEvents: false,
-      readWriteType: ReadWriteType.WRITE_ONLY,
-    });
+    logsBucketRule.addTarget(mainTarget);
   }
 }
