@@ -91,9 +91,9 @@ Set-Content -Path "C:\\Program Files\\fluent-bit\\conf\\fluent-bit.conf" -Value 
 
 Set-Content -Path "C:\\Program Files\\fluent-bit\\bin\\fluent-bit.bat" -Value @'
 echo off
-powershell.exe -File "Program Files\fluent-bit\bin\Start-FluentBit.ps1"
+powershell.exe -File "C:\Program Files\fluent-bit\bin\Start-FluentBit.ps1"
 '@
 
-$commandLine ='"powershell.exe C:\Program Files\fluent-bit\bin\fluent-bit.bat"  '
+$commandLine ='"C:\Program Files\fluent-bit\bin\fluent-bit.bat"  '
 New-Service -Name 'fluent-bit' -BinaryPathName $commandLine -DisplayName 'Fluent Bit' -StartupType Automatic
 #Start-Service -Name "fluent-bit"
