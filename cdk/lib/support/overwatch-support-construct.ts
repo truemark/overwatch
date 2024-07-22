@@ -1,4 +1,5 @@
 import {Construct} from 'constructs';
+import {Fn, Stack} from 'aws-cdk-lib';
 import {StringParameter, CfnDocument} from 'aws-cdk-lib/aws-ssm';
 import {IVpc, SecurityGroup, Port, Peer} from 'aws-cdk-lib/aws-ec2';
 import {PrometheusScraper} from './prometheus-scraper';
@@ -6,6 +7,13 @@ import {Cluster} from 'aws-cdk-lib/aws-ecs';
 import {CfnWorkspace} from 'aws-cdk-lib/aws-aps';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  ManagedPolicy,
+  Policy,
+  PolicyStatement,
+  Role,
+  ServicePrincipal,
+} from 'aws-cdk-lib/aws-iam';
 
 export interface OverwatchSupportConstructProps {
   readonly vpc: IVpc;
@@ -23,9 +31,50 @@ export class OverwatchSupportConstruct extends Construct {
       alias: 'Overwatch',
     });
 
+    const overwatchEc2Role = new Role(this, 'OverwatchEc2Role', {
+      assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
+      roleName: 'overwatchEc2',
+    });
+    const overwatchEc2Policy = new ManagedPolicy(this, 'overwatchEc2Policy', {
+      managedPolicyName: 'OverwatchEc2Policy',
+      statements: [
+        new PolicyStatement({
+          actions: ['aps:RemoteWrite'],
+          resources: ['*'],
+          conditions: {
+            StringLike: {
+              'aps:alias': 'Overwatch*',
+            },
+          },
+        }),
+        new PolicyStatement({
+          actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
+          resources: ['arn:aws:firehose:*:*:deliverystream/overwatch*'],
+        }),
+        new PolicyStatement({
+          actions: ['ec2:DescribeInstances'],
+          resources: ['*'],
+        }),
+      ],
+    });
+    overwatchEc2Policy.attachToRole(overwatchEc2Role);
+    overwatchEc2Role.addManagedPolicy(
+      ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
+    );
+    overwatchEc2Role.addManagedPolicy(
+      ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
+    );
+
     // eslint-disable-next-line n/no-unsupported-features/node-builtins
     const nodeExporterServiceConfig = fs.readFileSync(
-      path.join(__dirname, '..', '..', 'support', 'node_exporter.service'),
+      path.join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        'support',
+        'node_exporter.service'
+      ),
       'utf-8'
     );
     new StringParameter(this, 'NodeExporterServiceConfigParam', {
@@ -77,6 +126,7 @@ export class OverwatchSupportConstruct extends Construct {
                   __dirname,
                   '..',
                   '..',
+                  '..',
                   'support',
                   'node_exporter_install.ps1'
                 ),
@@ -98,6 +148,7 @@ export class OverwatchSupportConstruct extends Construct {
                   __dirname,
                   '..',
                   '..',
+                  '..',
                   'support',
                   'node_exporter_install.sh'
                 ),
@@ -114,30 +165,69 @@ export class OverwatchSupportConstruct extends Construct {
       name: 'InstallNodeExporter',
       updateMethod: 'NewVersion',
     });
+    const writeuri = prometheusWorkspace.attrPrometheusEndpoint;
+    // split writeuri to get hostname and path
+    const writeuriarray = Fn.split('/', writeuri);
+    const workspaceId = Fn.select(4, writeuriarray);
+    const prometheusDomain = Fn.parseDomainName(writeuri);
+    const region = Stack.of(this).region;
 
-    // Create and overwatch ECS cluster
-    const cluster = new Cluster(this, 'Overwatch', {
-      vpc: props.vpc,
+    const fluentbitDocumentContent = {
+      schemaVersion: '2.2',
+      description: 'Install fluent-bit',
+      parameters: {
+        Windows64FluentbitPackageUrl: {
+          default:
+            'https://packages.fluentbit.io/windows/fluent-bit-3.1.3-win64.exe',
+          description: 'Windows 64-bit Fluent-bit package URL',
+          type: 'String',
+        },
+        PrometheusWorkspace: {
+          default: workspaceId,
+          description: 'Prometheus Remote Write URI',
+          type: 'String',
+        },
+        PrometheusHostname: {
+          default: prometheusDomain,
+          description: 'Prometheus Remote Write URI',
+          type: 'String',
+        },
+        Region: {
+          default: region,
+          description: 'Region',
+          type: 'String',
+        },
+      },
+      mainSteps: [
+        {
+          precondition: {
+            StringEquals: ['platformType', 'Windows'],
+          },
+          action: 'aws:runPowerShellScript',
+          name: 'WindowsFluentbitInstall',
+          inputs: {
+            runCommand: fs
+              .readFileSync(
+                path.join(
+                  __dirname,
+                  '..',
+                  '..',
+                  '..',
+                  'support',
+                  'fluent_bit_install.ps1'
+                ),
+                'utf-8'
+              )
+              .split('\n'),
+          },
+        },
+      ],
+    };
+    new CfnDocument(this, 'InstallFluentbitDocument', {
+      content: fluentbitDocumentContent,
+      documentType: 'Command',
+      name: 'InstallFluentbit',
+      updateMethod: 'NewVersion',
     });
-    // Create Prometheus scraper
-    const ecsPrometheus = new PrometheusScraper(this, 'PrometheusScraper', {
-      cluster: cluster,
-      workspace: prometheusWorkspace,
-    });
-
-    const securityGroup = new SecurityGroup(this, 'PrometheusSecurityGroup', {
-      vpc: props.vpc,
-      securityGroupName: 'prometheus-sg',
-      description: 'Allow Prometheus scraping on port 9100 within the VPC',
-      allowAllOutbound: true,
-    });
-    // Allow inbound traffic on port 9100 from within the VPC
-    securityGroup.addIngressRule(
-      Peer.securityGroupId(
-        ecsPrometheus.fargatePrometheus.securityGroup.securityGroupId
-      ),
-      Port.tcp(9100),
-      'Allow Prometheus scraping'
-    );
   }
 }
