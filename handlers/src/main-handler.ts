@@ -243,12 +243,13 @@ log-pipeline:
         region: "${region}"
         sts_role_arn: "${stsRoleArn}"
   processor:
+    - substitute_string:
+        entries:
+          - source: "message"
+            from: "^.*info\\\\s\\\\{"
+            to: "{"
     - parse_json:
-    - date:
-        from_time_received: true
-        destination: "ingest_timestamp"
-    - delete_entries:
-        with_keys: ["s3"]
+        parse_when: '/message =~ "^[{].*"'
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]
