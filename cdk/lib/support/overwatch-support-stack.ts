@@ -11,6 +11,7 @@ import {
   PolicyStatement,
   Role,
 } from 'aws-cdk-lib/aws-iam';
+import {AutoLogConstruct} from './autolog';
 
 export interface OverwatchSupportStackProps extends ExtendedStackProps {
   readonly primaryRegion?: boolean;
@@ -201,6 +202,7 @@ export class OverwatchSupportStack extends ExtendedStack {
     new OverwatchSupportConstruct(this, 'Default', {
       vpc,
     });
+    new AutoLogConstruct(this, 'AutoLog');
   }
 
   static propsFromContext(app: App): OverwatchSupportStackProps {
