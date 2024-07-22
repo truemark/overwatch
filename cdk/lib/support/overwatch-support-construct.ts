@@ -1,30 +1,18 @@
 import {Construct} from 'constructs';
 import {Fn, Stack} from 'aws-cdk-lib';
 import {StringParameter, CfnDocument} from 'aws-cdk-lib/aws-ssm';
-import {IVpc, SecurityGroup, Port, Peer} from 'aws-cdk-lib/aws-ec2';
-import {PrometheusScraper} from './prometheus-scraper';
-import {Cluster} from 'aws-cdk-lib/aws-ecs';
 import {CfnWorkspace} from 'aws-cdk-lib/aws-aps';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
   ManagedPolicy,
-  Policy,
   PolicyStatement,
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
 
-export interface OverwatchSupportConstructProps {
-  readonly vpc: IVpc;
-}
-
 export class OverwatchSupportConstruct extends Construct {
-  constructor(
-    scope: Construct,
-    id: string,
-    props: OverwatchSupportConstructProps
-  ) {
+  constructor(scope: Construct, id: string) {
     super(scope, id);
 
     const prometheusWorkspace = new CfnWorkspace(this, 'Workspace', {
