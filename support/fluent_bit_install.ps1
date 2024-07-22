@@ -7,12 +7,13 @@ sc.exe delete fluent-bit
 $ErrorActionPreference = "Stop"
 
 
-Set-Content -Path "C:\\Program Files\\fluent-bit\\bin\\Start-FluentBit.ps1" -Value @'
+# Function to get IMDSv2 token
 function Get-IMDSToken {
     $token = Invoke-RestMethod -Method PUT -Uri http://169.254.169.254/latest/api/token -Headers @{"X-aws-ec2-metadata-token-ttl-seconds"="21600"}
     return $token
 }
 
+# Function to get EC2 metadata
 function Get-Metadata {
     param (
         [string]$Uri,
@@ -28,19 +29,18 @@ function Get-Metadata {
     }
 }
 
+# Retrieve EC2 metadata values
 $token = Get-IMDSToken
 
 $instanceId = Get-Metadata -Uri "http://169.254.169.254/latest/meta-data/instance-id" -Token $token
 $instancePrivateIp = Get-Metadata -Uri "http://169.254.169.254/latest/meta-data/local-ipv4" -Token $token
 $instanceHostname = Get-Metadata -Uri "http://169.254.169.254/latest/meta-data/local-hostname" -Token $token
+$hostname = hostname
 
-[System.Environment]::SetEnvironmentVariable('INSTANCE_ID', $instanceId, [System.EnvironmentVariableTarget]::Process)
-[System.Environment]::SetEnvironmentVariable('INSTANCE_PRIVATE_IP', $instancePrivateIp, [System.EnvironmentVariableTarget]::Process)
-[System.Environment]::SetEnvironmentVariable('INSTANCE_LOCAL_HOSTNAME', $instanceHostname, [System.EnvironmentVariableTarget]::Process)
 
-Start-Process -FilePath "C:\\Program Files\\fluent-bit\\bin\\fluent-bit.exe" -ArgumentList "-c", "../conf/fluent-bit.conf" -NoNewWindow -Wait
-'@
-Set-Content -Path "C:\\Program Files\\fluent-bit\\conf\\fluent-bit.conf" -Value @'
+
+# Create the configuration content
+$configContent = @"
 [SERVICE]
     # Flush interval seconds
     flush        60
@@ -76,24 +76,23 @@ Set-Content -Path "C:\\Program Files\\fluent-bit\\conf\\fluent-bit.conf" -Value 
     Host                {{ PrometheusHostname }}
     Port                443
     URI                 /workspaces/{{ PrometheusWorkspace }}/api/v1/remote_write
-    #URI                 {{ PrometheusWorkspace }}
     Retry_Limit         False
     tls                 On
     tls.verify          On
-    Add_label           host ${HOSTNAME}
-    Add_label           instanceId  ${INSTANCE_ID}
-    Add_label           private_ip ${INSTANCE_PRIVATE_IP}
-    Add_label           local_hostname ${INSTANCE_LOCAL_HOSTNAME}
+    Add_label           host $hostname
+    Add_label           instanceId $instanceId
+    Add_label           private_ip $instancePrivateIp
+    Add_label           local_hostname $instanceHostname
     # AWS credentials
     aws_auth            on
     aws_region          {{ Region }}
-'@
+"@
 
-Set-Content -Path "C:\\Program Files\\fluent-bit\\bin\\fluent-bit.bat" -Value @'
-echo off
-powershell.exe -File "C:\Program Files\fluent-bit\bin\Start-FluentBit.ps1"
-'@
+# Write the configuration content to the file
+Set-Content -Path "C:\Program Files\fluent-bit\conf\fluent-bit.conf" -Value $configContent
 
-$commandLine ='"C:\Program Files\fluent-bit\bin\fluent-bit.bat"  '
+
+
+$commandLine ='"C:\Program Files\fluent-bit\bin\fluent-bit.exe -c C:\Program Files\fluent-bit\conf\fluent-bit.conf"  '
 New-Service -Name 'fluent-bit' -BinaryPathName $commandLine -DisplayName 'Fluent Bit' -StartupType Automatic
 #Start-Service -Name "fluent-bit"

@@ -34,7 +34,7 @@ $availabilityZone = Get-Metadata -Uri "http://169.254.169.254/latest/meta-data/p
 [System.Environment]::SetEnvironmentVariable('AVAILABILITY_ZONE', $availabilityZone, [System.EnvironmentVariableTarget]::Process)
 
 # Start Fluent Bit
-Start-Process -FilePath "C:\Path\To\fluent-bit.exe" -ArgumentList "--config", "C:\Path\To\fluent-bit.conf"
+Start-Process -FilePath "C:\Path\To\fluent-bit.exe" -ArgumentList "-c", "C:\Path\To\fluent-bit.conf"
 
 
 
