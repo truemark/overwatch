@@ -20,9 +20,12 @@ export class AutoLogIngestionFunction extends ExtendedNodejsFunction {
         __dirname,
         '..',
         '..',
+        '..',
+        '..',
         'handlers',
         'src',
         'support',
+        'autolog',
         'log-ingestion-handler.ts'
       ),
       architecture: Architecture.ARM_64,
