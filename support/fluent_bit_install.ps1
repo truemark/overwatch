@@ -80,7 +80,7 @@ $configContent = @"
     tls                 On
     tls.verify          On
     Add_label           host $hostname
-    Add_label           instanceId $instanceId
+    Add_label           instance $instanceId
     Add_label           private_ip $instancePrivateIp
     Add_label           local_hostname $instanceHostname
     # AWS credentials
@@ -93,6 +93,6 @@ Set-Content -Path "C:\Program Files\fluent-bit\conf\fluent-bit.conf" -Value $con
 
 
 
-$commandLine ='"C:\Program Files\fluent-bit\bin\fluent-bit.exe -c C:\Program Files\fluent-bit\conf\fluent-bit.conf"  '
+$commandLine ='"C:\Program Files\fluent-bit\bin\fluent-bit.exe" -c "C:\Program Files\fluent-bit\conf\fluent-bit.conf"'
 New-Service -Name 'fluent-bit' -BinaryPathName $commandLine -DisplayName 'Fluent Bit' -StartupType Automatic
-#Start-Service -Name "fluent-bit"
+Start-Service -Name "fluent-bit"
