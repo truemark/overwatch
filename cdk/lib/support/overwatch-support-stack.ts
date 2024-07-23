@@ -11,7 +11,7 @@ import {
   Role,
 } from 'aws-cdk-lib/aws-iam';
 import {AutoLogConstruct} from './autolog';
-import {InstallConstruct} from './install/install-construct';
+import {InstallConstruct} from './install';
 
 export interface OverwatchSupportStackProps extends ExtendedStackProps {
   readonly primaryRegion?: boolean;

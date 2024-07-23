@@ -67,7 +67,7 @@ export class AutoLogTagFunction extends ExtendedNodejsFunction {
       })
     );
 
-    const deadLetterQueue = new StandardQueue(this, 'Dlq'); // TODO Add alerting around this
+    const deadLetterQueue = new StandardQueue(this, 'AutoLogDlq'); // TODO Add alerting around this
 
     const target = new LambdaFunction(this, {
       deadLetterQueue,
