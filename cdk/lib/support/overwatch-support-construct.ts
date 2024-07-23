@@ -20,41 +20,45 @@ export class OverwatchSupportConstruct extends Construct {
       alias: 'Overwatch',
     });
 
-    const overwatchEc2Role = new Role(this, 'OverwatchEc2Role', {
+    const overwatchProducerRole = new Role(this, 'OverwatchProducerRole', {
       assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
-      roleName: 'overwatchEc2',
+      roleName: 'OverwatchProducer',
     });
-    const overwatchEc2Policy = new ManagedPolicy(this, 'overwatchEc2Policy', {
-      managedPolicyName: 'OverwatchEc2Policy',
-      statements: [
-        new PolicyStatement({
-          actions: ['aps:RemoteWrite'],
-          resources: ['*'],
-          conditions: {
-            StringLike: {
-              'automation:id': 'overwatch*',
-            },
-          },
-        }),
-        new PolicyStatement({
-          actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
-          resources: ['arn:aws:firehose:*:*:deliverystream/overwatch*'],
-        }),
-        new PolicyStatement({
-          actions: ['ec2:DescribeInstances'],
-          resources: ['*'],
-        }),
-      ],
-    });
-    overwatchEc2Policy.attachToRole(overwatchEc2Role);
-    overwatchEc2Role.addManagedPolicy(
+
+    const overwatchProducerPolicy = new ManagedPolicy(
+      this,
+      'OverwatchProducerPolicy',
+      {
+        managedPolicyName: 'OverwatchProducer',
+        statements: [
+          new PolicyStatement({
+            actions: ['aps:RemoteWrite'],
+            resources: [prometheusWorkspace.attrArn],
+          }),
+          new PolicyStatement({
+            actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
+            resources: [
+              'arn:aws:firehose:*:*:deliverystream/Overwatch*',
+              'arn:aws:firehose:*:*:deliverystream/AutoLog*',
+            ],
+          }),
+          new PolicyStatement({
+            actions: ['ec2:DescribeInstances'],
+            resources: ['*'],
+          }),
+        ],
+      }
+    );
+    overwatchProducerPolicy.attachToRole(overwatchProducerRole);
+    overwatchProducerRole.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     );
-    overwatchEc2Role.addManagedPolicy(
+    overwatchProducerRole.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
     );
-    const instanceProfile = new InstanceProfile(this, 'InstanceProfile', {
-      role: overwatchEc2Role,
+    new InstanceProfile(this, 'InstanceProfile', {
+      role: overwatchProducerRole,
+      instanceProfileName: 'OverwatchProducer',
     });
 
     // eslint-disable-next-line n/no-unsupported-features/node-builtins
