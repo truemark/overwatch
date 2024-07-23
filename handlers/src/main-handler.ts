@@ -101,6 +101,7 @@ async function createPipeline(
         refresh_interval: '30s',
         'index.queries.cache.enabled': true,
         'index.requests.cache.enable': true,
+        'index.mapping.total_fields.limit': 3000,
       },
       mappings: {
         properties: {
