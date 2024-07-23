@@ -4,23 +4,19 @@ import {
   SendMessageCommand,
 } from '@aws-sdk/client-sqs';
 import * as logging from '@nr1e/logging';
-import {
-  CloudWatchLogsClient,
-  CreateLogGroupCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
-import {
-  getOpenSearchEndpoint,
-  getOpenSearchClient,
-  OpenSearchClient,
-} from './open-search-helper';
 
 // Constants for configuration
 const REGION = process.env.AWS_REGION!;
 
-const log = logging.getLogger('main-handler');
+const log = logging.initialize({
+  svc: 'overwatchsupport',
+  level: 'trace',
+});
+
 const sqsClient = new SQSClient({});
 
 // Extracts bucket name and object key from the event
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractBucketDetails(event: any) {
   return {
     bucketName: event.detail.requestParameters.bucketName,
@@ -36,7 +32,8 @@ function extractIndexName(objectKey: string) {
 // Creates an SQS queue if it doesn't exist
 async function createQueueIfNeeded(
   indexName: string,
-  log: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  log: any,
 ): Promise<string> {
   const queueName = `overwatch-${indexName}-queue`;
   try {
@@ -51,7 +48,7 @@ async function createQueueIfNeeded(
           'automation:url': 'https://github.com/truemark/overwatch',
           'automation:component-id': 'overwatch',
         },
-      })
+      }),
     );
     log.info().str('queueName', queueName).msg('SQS Queue created');
     return QueueUrl || '';
@@ -64,15 +61,17 @@ async function createQueueIfNeeded(
 // Sends a message to the specified SQS queue
 async function sendMessageToQueue(
   queueUrl: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   messageBody: any,
-  log: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  log: any,
 ) {
   try {
     const {MessageId} = await sqsClient.send(
       new SendMessageCommand({
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify(messageBody),
-      })
+      }),
     );
     log.info().str('messageId', MessageId).msg('Message sent to SQS Queue');
   } catch (error) {
@@ -81,39 +80,42 @@ async function sendMessageToQueue(
   }
 }
 
-async function ensureLogGroupExists(
-  logGroupName: string,
-  pipelineName: string,
-  log: any
-) {
-  const cwlClient = new CloudWatchLogsClient({region: REGION});
+// async function ensureLogGroupExists(
+//   logGroupName: string,
+//   pipelineName: string,
+//   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//   log: any,
+// ) {
+//   const cwlClient = new CloudWatchLogsClient({region: REGION});
+//
+//   try {
+//     // Try to create the log group (idempotent if it already exists)
+//     await cwlClient.send(new CreateLogGroupCommand({logGroupName}));
+//     // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
+//
+//     log.info().str('logGroupName', logGroupName).msg('Log group ensured.');
+//   } catch (error) {
+//     if ((error as Error).name === 'ResourceAlreadyExistsException') {
+//       //Always ensure policy is created
+//       // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
+//
+//       log
+//         .info()
+//         .str('logGroupName', logGroupName)
+//         .msg('Log group already exists.');
+//     } else {
+//       log.error().err(error).msg('Failed to ensure log group exists');
+//       throw error;
+//     }
+//   }
+// }
 
-  try {
-    // Try to create the log group (idempotent if it already exists)
-    await cwlClient.send(new CreateLogGroupCommand({logGroupName}));
-    // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
-
-    log.info().str('logGroupName', logGroupName).msg('Log group ensured.');
-  } catch (error) {
-    if ((error as Error).name === 'ResourceAlreadyExistsException') {
-      //Always ensure policy is created
-      // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
-
-      log
-        .info()
-        .str('logGroupName', logGroupName)
-        .msg('Log group already exists.');
-    } else {
-      log.error().err(error).msg('Failed to ensure log group exists');
-      throw error;
-    }
-  }
-}
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createS3Notification = (event: any) => {
   const eventData = event.detail;
   const s3BucketArn = eventData.resources.find(
-    (resource: any) => resource.type === 'AWS::S3::Bucket'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (resource: any) => resource.type === 'AWS::S3::Bucket',
   ).ARN;
 
   const s3Notification = {
@@ -142,12 +144,8 @@ const createS3Notification = (event: any) => {
 };
 
 // Main handler function
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function handler(event: any): Promise<void> {
-  await logging.initialize({
-    svc: 'overwatchsupport',
-    level: 'trace',
-  });
-
   log.trace().unknown('event', event).msg('Received Tagging event'); //TODO: Remove for PROD deployment
 
   //Validate region env var
@@ -162,7 +160,7 @@ export async function handler(event: any): Promise<void> {
   }
 
   const indexName = extractIndexName(objectKey);
-  const pipelineName = `ingestion-pipeline-${indexName}`;
+  // const pipelineName = `ingestion-pipeline-${indexName}`;
 
   const queueUrl = await createQueueIfNeeded(indexName, log);
   const messageBody = createS3Notification(event);

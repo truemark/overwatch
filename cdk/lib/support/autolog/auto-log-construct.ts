@@ -13,6 +13,9 @@ import {LogGroup, RetentionDays} from 'aws-cdk-lib/aws-logs';
 import {RemovalPolicy} from 'aws-cdk-lib';
 import {AutoLogIngestionFunction} from './auto-log-ingestion-function';
 
+/**
+ * Handles sending CloudWatch logs to Overwatch.
+ */
 export class AutoLogConstruct extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -77,41 +80,10 @@ export class AutoLogConstruct extends Construct {
       }
     );
 
-    const mainFunction = new AutoLogTagFunction(this, 'MainFunction', {
+    new AutoLogTagFunction(this, 'TagFunction', {
       deliveryStreamRole,
       deliveryStreamLogGroupName: deliveryStreamLogGroup.logGroupName,
       subscriptionFilterRole,
     });
-    const deadLetterQueue = new StandardQueue(this, 'DeadLetterQueue'); // TODO Add alerting around this
-    const mainTarget = new LambdaFunction(mainFunction, {
-      deadLetterQueue,
-    });
-
-    const tagRule = new Rule(this, 'TagRule', {
-      eventPattern: {
-        source: ['aws.tag'],
-        detailType: ['Tag Change on Resource'],
-        detail: {
-          service: ['logs'],
-          'resource-type': ['log-group'],
-          'changed-tag-keys': ['autolog:dest'],
-        },
-      },
-      description: 'Routes tag events to AutoLog',
-    });
-    tagRule.addTarget(mainTarget);
-
-    const logGroupRule = new Rule(this, 'LogGroupRule', {
-      eventPattern: {
-        source: ['aws.logs'],
-        detailType: ['AWS API Call via CloudTrail'],
-        detail: {
-          eventSource: ['logs.amazonaws.com'],
-          eventName: ['CreateLogGroup', 'DeleteLogGroup'],
-        },
-      },
-      description: 'Routes log group events to AutoLog',
-    });
-    logGroupRule.addTarget(mainTarget);
   }
 }

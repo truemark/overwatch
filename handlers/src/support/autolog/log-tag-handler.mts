@@ -6,12 +6,12 @@ import {
   getSubscriptionFilter,
   LogGroupTags,
   parseLogGroupName,
-} from './cloudwatch-helper';
+} from './cloudwatch-helper.mjs';
 import {
   createDeliveryStream,
   getDeliveryStream,
   waitForDeliveryStreamActivation,
-} from './firehose-helper';
+} from './firehose-helper.mjs';
 
 const log = logging.getRootLogger();
 

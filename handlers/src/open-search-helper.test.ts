@@ -1,4 +1,6 @@
-import {getOpenSearchClient, PartialIsmPolicy} from './open-search-helper';
+import {test} from 'vitest';
+
+import {getOpenSearchClient, PartialIsmPolicy} from './open-search-helper.mjs';
 
 function skip(): boolean {
   if (process.env.OPEN_SEARCH_MASTER_ROLE_ARN === undefined) {
@@ -73,7 +75,7 @@ test('Update Policy', async () => {
     policyId,
     policy,
     policyVersion?._seq_no,
-    policyVersion?._primary_term
+    policyVersion?._primary_term,
   );
 });
 

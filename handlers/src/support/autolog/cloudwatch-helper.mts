@@ -20,12 +20,12 @@ export interface LogGroupTags {
 }
 
 export async function getLogGroupTags(
-  arn: string
+  arn: string,
 ): Promise<LogGroupTags | null> {
   const response = await client.send(
     new ListTagsForResourceCommand({
       resourceArn: arn,
-    })
+    }),
   );
   if (response.tags !== undefined) {
     if (response.tags['autolog:dest'] !== undefined) {
@@ -50,7 +50,7 @@ export interface SubscriptionFilterDetails {
 }
 
 export async function getSubscriptionFilter(
-  props: GetSubscriptionFilterProps
+  props: GetSubscriptionFilterProps,
 ): Promise<SubscriptionFilterDetails | null> {
   const command = new DescribeSubscriptionFiltersCommand({
     logGroupName: props.logGroupName,
@@ -58,7 +58,7 @@ export async function getSubscriptionFilter(
   });
   const response = await client.send(command);
   const filter = (response.subscriptionFilters ?? []).find(
-    filter => filter.filterName === props.filterName
+    (filter) => filter.filterName === props.filterName,
   );
   if (filter) {
     log
@@ -86,7 +86,7 @@ export interface CreateSubscriptionFilterProps {
 }
 
 export async function createOrUpdateSubscriptionFilter(
-  props: CreateSubscriptionFilterProps
+  props: CreateSubscriptionFilterProps,
 ): Promise<string> {
   const command = new PutSubscriptionFilterCommand({
     logGroupName: props.logGroupName,
@@ -108,7 +108,7 @@ export interface DeleteSubscriptionFilterProps {
 }
 
 export async function deleteSubscriptionFilter(
-  props: DeleteSubscriptionFilterProps
+  props: DeleteSubscriptionFilterProps,
 ): Promise<void> {
   const command = new DeleteSubscriptionFilterCommand({
     logGroupName: props.logGroupName,

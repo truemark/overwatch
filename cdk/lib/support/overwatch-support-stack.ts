@@ -11,6 +11,7 @@ import {
   Role,
 } from 'aws-cdk-lib/aws-iam';
 import {AutoLogConstruct} from './autolog';
+import {InstallConstruct} from './install/install-construct';
 
 export interface OverwatchSupportStackProps extends ExtendedStackProps {
   readonly primaryRegion?: boolean;
@@ -190,7 +191,10 @@ export class OverwatchSupportStack extends ExtendedStack {
       });
     }
 
-    new OverwatchSupportConstruct(this, 'Default');
+    const overwatchSupport = new OverwatchSupportConstruct(this, 'Default');
+    new InstallConstruct(this, 'Install', {
+      workspace: overwatchSupport.workspace,
+    });
     new AutoLogConstruct(this, 'AutoLog');
   }
 
