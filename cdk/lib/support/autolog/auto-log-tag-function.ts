@@ -28,7 +28,7 @@ export class AutoLogTagFunction extends ExtendedNodejsFunction {
         'src',
         'support',
         'autolog',
-        'log-tag-handler.ts'
+        'log-tag-handler.mts'
       ),
       architecture: Architecture.ARM_64,
       handler: 'handler',

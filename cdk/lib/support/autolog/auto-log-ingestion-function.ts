@@ -26,7 +26,7 @@ export class AutoLogIngestionFunction extends ExtendedNodejsFunction {
         'src',
         'support',
         'autolog',
-        'log-ingestion-handler.ts'
+        'log-ingestion-handler.mts'
       ),
       architecture: Architecture.ARM_64,
       handler: 'handler',

@@ -7,7 +7,7 @@ import {
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
-import {InstallTagFunction} from './install-tag-function';
+import {InstallTagFunction} from './install/install-tag-function';
 
 /**
  * Handles the creation of primary services used in Overwatch.

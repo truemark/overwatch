@@ -23,6 +23,7 @@ export class InstallConstruct extends Construct {
         '..',
         '..',
         '..',
+        '..',
         'support',
         'node_exporter.service'
       ),
@@ -78,6 +79,7 @@ export class InstallConstruct extends Construct {
                   '..',
                   '..',
                   '..',
+                  '..',
                   'support',
                   'node_exporter_install.ps1'
                 ),
@@ -97,6 +99,7 @@ export class InstallConstruct extends Construct {
               .readFileSync(
                 path.join(
                   __dirname,
+                  '..',
                   '..',
                   '..',
                   '..',
@@ -164,6 +167,7 @@ export class InstallConstruct extends Construct {
                   '..',
                   '..',
                   '..',
+                  '..',
                   'support',
                   'fluent_bit_install.ps1'
                 ),
@@ -183,6 +187,7 @@ export class InstallConstruct extends Construct {
               .readFileSync(
                 path.join(
                   __dirname,
+                  '..',
                   '..',
                   '..',
                   '..',

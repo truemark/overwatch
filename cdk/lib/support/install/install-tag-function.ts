@@ -20,7 +20,7 @@ export class InstallTagFunction extends ExtendedNodejsFunction {
         'src',
         'support',
         'install',
-        'install-tag-handler.ts'
+        'install-tag-handler.mts'
       ),
       architecture: Architecture.ARM_64,
       handler: 'handler',
