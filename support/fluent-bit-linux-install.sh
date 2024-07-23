@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-#This code was derived from the fluent-bit linux install https://raw.githubusercontent.com/fluent/fluent-bit/master/install.sh
-
 # Provided primarily to simplify testing for staging, etc.
 RELEASE_URL=${FLUENT_BIT_PACKAGES_URL:-https://packages.fluentbit.io}
 RELEASE_KEY=${FLUENT_BIT_PACKAGES_KEY:-$RELEASE_URL/fluentbit.key}
@@ -116,6 +114,83 @@ SCRIPT
     ;;
 esac
 
+# Fetch instance metadata
+INSTANCE_METADATA_URL="http://169.254.169.254/latest/meta-data"
+TOKEN=$(curl -X PUT "$INSTANCE_METADATA_URL/../api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+
+if [ -n "$TOKEN" ]; then
+    echo "IMDSv2 Token obtained successfully: $TOKEN"
+    hostname=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$INSTANCE_METADATA_URL/hostname")
+    instanceId=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$INSTANCE_METADATA_URL/instance-id")
+    instancePrivateIp=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$INSTANCE_METADATA_URL/local-ipv4")
+    instanceHostname=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$INSTANCE_METADATA_URL/local-hostname")
+    region=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$INSTANCE_METADATA_URL/placement/region")
+else
+    echo "Failed to obtain IMDSv2 token, falling back to IMDSv1"
+    hostname=$(curl -s "$INSTANCE_METADATA_URL/hostname")
+    instanceId=$(curl -s "$INSTANCE_METADATA_URL/instance-id")
+    instancePrivateIp=$(curl -s "$INSTANCE_METADATA_URL/local-ipv4")
+    instanceHostname=$(curl -s "$INSTANCE_METADATA_URL/local-hostname")
+    region=$(curl -s "$INSTANCE_METADATA_URL/placement/region")
+fi
+
+# Replace placeholders in config template
+FLUENT_BIT_CONFIG=$(cat << EOF
+[SERVICE]
+    # Flush interval seconds
+    flush        60
+
+    # Daemon
+    daemon       Off
+
+    # Log_Level error warning info debug trace
+    log_level    info
+
+    # Parsers File
+    parsers_file parsers.conf
+
+    # Plugins File
+    plugins_file plugins.conf
+
+    # HTTP Server
+    # ===========
+    # Enable/Disable the built-in HTTP Server for metrics
+    http_server  Off
+    http_listen  0.0.0.0
+    http_port    2020
+[INPUT]
+    name prometheus_scrape
+    host localhost
+    port 9100
+    tag node_metrics
+    metrics_path /metrics?format=prometheus
+    scrape_interval 60s
+[OUTPUT]
+    Name                prometheus_remote_write
+    Match               node_metrics
+    Host                {{ PrometheusHostname }}
+    Port                443
+    URI                 /workspaces/{{ PrometheusWorkspace }}/api/v1/remote_write
+    Retry_Limit         False
+    tls                 On
+    tls.verify          On
+    Add_label           host $hostname
+    Add_label           instance $instanceId
+    Add_label           private_ip $instancePrivateIp
+    Add_label           local_hostname $instanceHostname
+    # AWS credentials
+    aws_auth            on
+    aws_region          $region
+EOF
+)
+
+# Write the configuration to file
+FLUENT_BIT_CONFIG_PATH="/etc/fluent-bit/fluent-bit.conf"
+echo "$FLUENT_BIT_CONFIG" | $SUDO tee $FLUENT_BIT_CONFIG_PATH > /dev/null
+
+systemctl enable fluent-bit
+systemctl start fluent-bit
+
 echo ""
-echo "Installation completed. Happy Logging!"
+echo "Installation and configuration completed and configured to send metrics to prometheus."
 echo ""

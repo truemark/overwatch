@@ -5,6 +5,7 @@ import {CfnWorkspace} from 'aws-cdk-lib/aws-aps';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  InstanceProfile,
   ManagedPolicy,
   PolicyStatement,
   Role,
@@ -31,7 +32,7 @@ export class OverwatchSupportConstruct extends Construct {
           resources: ['*'],
           conditions: {
             StringLike: {
-              'aps:alias': 'Overwatch*',
+              'automation:id': 'overwatch*',
             },
           },
         }),
@@ -52,6 +53,9 @@ export class OverwatchSupportConstruct extends Construct {
     overwatchEc2Role.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
     );
+    const instanceProfile = new InstanceProfile(this, 'InstanceProfile', {
+      role: overwatchEc2Role,
+    });
 
     // eslint-disable-next-line n/no-unsupported-features/node-builtins
     const nodeExporterServiceConfig = fs.readFileSync(
@@ -203,6 +207,28 @@ export class OverwatchSupportConstruct extends Construct {
                   '..',
                   'support',
                   'fluent_bit_install.ps1'
+                ),
+                'utf-8'
+              )
+              .split('\n'),
+          },
+        },
+        {
+          precondition: {
+            StringEquals: ['platformType', 'Linux'],
+          },
+          action: 'aws:runShellScript',
+          name: 'LinuxFluentbitInstall',
+          inputs: {
+            runCommand: fs
+              .readFileSync(
+                path.join(
+                  __dirname,
+                  '..',
+                  '..',
+                  '..',
+                  'support',
+                  'fluent-bit-linux-install.sh'
                 ),
                 'utf-8'
               )
