@@ -1,11 +1,13 @@
 import {Construct} from 'constructs';
 import {StringParameter, CfnDocument} from 'aws-cdk-lib/aws-ssm';
 import {IVpc, SecurityGroup, Port, Peer} from 'aws-cdk-lib/aws-ec2';
+import {AlertsTopic} from 'truemark-cdk-lib/aws-centergauge';
 import {PrometheusScraper} from './prometheus-scraper';
 import {Cluster} from 'aws-cdk-lib/aws-ecs';
 import {CfnWorkspace} from 'aws-cdk-lib/aws-aps';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as process from 'process';
 
 export interface OverwatchSupportConstructProps {
   readonly vpc: IVpc;
@@ -19,8 +21,39 @@ export class OverwatchSupportConstruct extends Construct {
   ) {
     super(scope, id);
 
+    const alertsTopic = new AlertsTopic(this, 'AlertsTopic', {
+      displayName: 'overwatch',
+      url: 'https://ingest.centergauge.com/',
+    });
+
     const prometheusWorkspace = new CfnWorkspace(this, 'Workspace', {
       alias: 'Overwatch',
+      alertManagerDefinition: `
+        template_files:
+          default_template: |
+            {{ define "sns.default.message" }}{"receiver":"{{ .Receiver }}","source":"prometheus","status":"{{ .Status }}","alerts":[{{ range $alertIndex, $alerts := .Alerts }}{{ if $alertIndex }},{{ end }}{"status":"{{ $alerts.Status }}",{{ if gt (len $alerts.Labels.SortedPairs) 0 }}"labels":{{ "{" }}{{ range $index, $label := $alerts.Labels.SortedPairs }}{{ if $index }},{{ end }}"{{ $label.Name }}":"{{ $label.Value }}"{{ end }}{{ "}" }},{{ end }}{{ if gt (len $alerts.Annotations.SortedPairs) 0 }}"annotations":{{ "{" }}{{ range $index, $annotations := $alerts.Annotations.SortedPairs }}{{ if $index }},{{ end }}"{{ $annotations.Name }}":"{{ $annotations.Value }}"{{ end }}{{ "}" }}{{ end }}}{{ end }}]}{{ end }}
+            {{ define "sns.default.subject" }}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}]{{ end }}
+        alertmanager_config: |
+          global:
+          templates:
+            - 'default_template'
+          inhibit_rules:
+          - source_match:
+              severity: 'critical'
+            target_match:
+              severity: 'warning'
+            equal: ['alertname']
+          route:
+            receiver: 'sns'
+            group_by: ['...']
+          receivers:
+            - name: 'sns'
+              sns_configs:
+                - subject: 'prometheus_alert'
+                  sigv4:
+                    region: '${process.env.CDK_DEFAULT_REGION}'
+                  topic_arn: '${alertsTopic.topic.topicArn}'
+        `,
     });
 
     // eslint-disable-next-line n/no-unsupported-features/node-builtins
