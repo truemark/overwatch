@@ -16,7 +16,7 @@ export class InstallTagFunction extends ExtendedNodejsFunction {
 
     role.addToPolicy(
       new iam.PolicyStatement({
-        actions: ['ssm:SendCommand'],
+        actions: ['ssm:SendCommand', 'ssm:DescribeInstanceInformation'],
         resources: ['*'],
       })
     );
@@ -73,6 +73,3 @@ export class InstallTagFunction extends ExtendedNodejsFunction {
     tagRule.addTarget(target);
   }
 }
-
-// grab intance id from event, trigger ssm documents, use handler to run commands
-// on the instance
