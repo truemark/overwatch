@@ -35,9 +35,12 @@ async function isInstanceSSMReachable(
         return true;
       }
 
-      log.trace().msg(`Instance ${instanceId} is not reachable. Retrying...`);
+      log
+        .trace()
+        .str('instanceId', instanceId)
+        .msg(`Instance is not reachable. Retrying...`);
     } catch (error) {
-      log.error().msg(`Error while checking instance status: ${error}`);
+      log.warn().err(error).msg(`Failed checking instance status.`);
     }
 
     retries += 1;
@@ -47,15 +50,34 @@ async function isInstanceSSMReachable(
   return false;
 }
 
+interface TagChangeDetail {
+  tags: Record<string, string>;
+}
+
+function isTagChangeDetail(value: unknown): value is TagChangeDetail {
+  return !!(
+    (value as Partial<TagChangeDetail>).tags &&
+    typeof (value as TagChangeDetail).tags === 'object'
+  );
+}
+
 export const handler: EventBridgeHandler<string, string, void> = async (
   event: EventBridgeEvent<string, string>,
 ) => {
   log.trace().obj('event', event).msg('Received event');
 
   log.trace().obj('event.resources', event.resources).msg('Resources');
-  if (event.resources && event.resources.length > 0) {
+  if (
+    isTagChangeDetail(event.detail) &&
+    event.resources &&
+    event.resources.length > 0
+  ) {
     const instanceArn = event.resources[0];
     const instanceId = instanceArn.split('/').pop();
+    if (!instanceId) {
+      log.error().msg('Failed to extract instance ID');
+      return;
+    }
 
     log.trace().msg(`Extracted instance ID: ${instanceId}`);
     try {
@@ -86,18 +108,20 @@ export const handler: EventBridgeHandler<string, string, void> = async (
           const response = await ssmClient.send(command);
           log
             .trace()
-            .obj('SSM Response', response)
-            .msg(`SSM command ${commandName} sent successfully`);
+            .obj('response', response)
+            .str('command', commandName)
+            .msg(`SSM command sent successfully`);
         }
       } else {
         log
           .error()
-          .msg(
-            `Instance ${instanceId} is not reachable after ${(MAX_RETRIES * RETRY_DELAY_MS) / 1000} seconds.`,
-          );
+          .str('instanceId', instanceId)
+          .num('retries', MAX_RETRIES)
+          .num('retryDelayMs', RETRY_DELAY_MS)
+          .msg(`Instance is not reachable after retries`);
       }
     } catch (error) {
-      log.error().msg(`Failed to send SSM command: ${error}`);
+      log.error().err(error).msg('Failed to send SSM command');
     }
   } else {
     log.error().msg('No resources found in the event');
