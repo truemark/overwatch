@@ -24,7 +24,11 @@ export class OverwatchSupportConstruct extends Construct {
     super(scope, id);
 
     const alertsTopic = new AlertsTopic(this, 'AlertsTopic', {
+<<<<<<< Updated upstream
       topicName: 'OverwatchAlerts',
+=======
+      displayName: 'OverwatchAlerts',
+>>>>>>> Stashed changes
       url: 'https://ingest.centergauge.com/',
     });
 
