@@ -6,7 +6,6 @@ alertmanager_config: |
   global:
   templates:
     - 'default_template'
-
   inhibit_rules:
   - source_match:
       severity: 'critical'
