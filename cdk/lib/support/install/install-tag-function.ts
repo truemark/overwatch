@@ -6,9 +6,26 @@ import {Duration} from 'aws-cdk-lib';
 import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
 import {LambdaFunction} from 'aws-cdk-lib/aws-events-targets';
 import {Rule} from 'aws-cdk-lib/aws-events';
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 export class InstallTagFunction extends ExtendedNodejsFunction {
   constructor(scope: Construct, id: string) {
+    const role = new iam.Role(scope, 'Role', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    });
+
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['ssm:SendCommand'],
+        resources: ['*'],
+      })
+    );
+
+    role.addManagedPolicy({
+      managedPolicyArn:
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+    });
+
     super(scope, id, {
       entry: path.join(
         __dirname,
@@ -24,6 +41,7 @@ export class InstallTagFunction extends ExtendedNodejsFunction {
       ),
       architecture: Architecture.ARM_64,
       handler: 'handler',
+      role: role,
       timeout: Duration.minutes(10),
       deploymentOptions: {
         createDeployment: false,
@@ -55,3 +73,6 @@ export class InstallTagFunction extends ExtendedNodejsFunction {
     tagRule.addTarget(target);
   }
 }
+
+// grab intance id from event, trigger ssm documents, use handler to run commands
+// on the instance
