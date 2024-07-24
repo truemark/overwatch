@@ -12,6 +12,7 @@ import {InstallTagFunction} from './install/install-tag-function';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as process from 'process';
+import {Stack} from 'aws-cdk-lib';
 
 /**
  * Handles the creation of primary services used in Overwatch.
@@ -23,7 +24,7 @@ export class OverwatchSupportConstruct extends Construct {
     super(scope, id);
 
     const alertsTopic = new AlertsTopic(this, 'AlertsTopic', {
-      displayName: 'overwatch',
+      topicName: 'OverwatchAlerts',
       url: 'https://ingest.centergauge.com/',
     });
 
@@ -41,7 +42,7 @@ export class OverwatchSupportConstruct extends Construct {
           ),
           'utf-8'
         )
-        .replace(/{{{region}}}/g, process.env.CDK_DEFAULT_REGION ?? 'us-east-1')
+        .replace(/{{{region}}}/g, Stack.of(this).region)
         .replace(/{{{alertsTopicArn}}}/g, alertsTopic.topic.topicArn),
     });
 

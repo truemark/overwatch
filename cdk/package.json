@@ -28,6 +28,6 @@
     "aws-cdk-lib": "2.147.1",
     "constructs": "^10.0.0",
     "source-map-support": "^0.5.21",
-    "truemark-cdk-lib": "^1.13.2"
+    "truemark-cdk-lib": "^1.14.0"
   }
 }
