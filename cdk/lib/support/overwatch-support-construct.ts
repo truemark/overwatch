@@ -7,7 +7,11 @@ import {
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
+import {AlertsTopic} from 'truemark-cdk-lib/aws-centergauge';
 import {InstallTagFunction} from './install/install-tag-function';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as process from 'process';
 
 /**
  * Handles the creation of primary services used in Overwatch.
@@ -18,8 +22,27 @@ export class OverwatchSupportConstruct extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
+    const alertsTopic = new AlertsTopic(this, 'AlertsTopic', {
+      displayName: 'overwatch',
+      url: 'https://ingest.centergauge.com/',
+    });
+
     this.workspace = new CfnWorkspace(this, 'Workspace', {
       alias: 'Overwatch',
+      alertManagerDefinition: fs
+        .readFileSync(
+          path.join(
+            __dirname,
+            '..',
+            '..',
+            '..',
+            'support',
+            'alertmanager.yaml'
+          ),
+          'utf-8'
+        )
+        .replace(/{{{region}}}/g, process.env.CDK_DEFAULT_REGION ?? 'us-east-1')
+        .replace(/{{{alertsTopicArn}}}/g, alertsTopic.topic.topicArn),
     });
 
     const producerRole = new Role(this, 'OverwatchProducerRole', {
