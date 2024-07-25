@@ -12,6 +12,7 @@ import {
 } from 'aws-cdk-lib/aws-iam';
 import {AutoLogConstruct} from './autolog';
 import {InstallConstruct} from './install';
+import {DbMetricsConstruct} from './dbmetrics/db-metrics-construct';
 
 export interface OverwatchSupportStackProps extends ExtendedStackProps {
   readonly primaryRegion?: boolean;
@@ -196,6 +197,7 @@ export class OverwatchSupportStack extends ExtendedStack {
       workspace: overwatchSupport.workspace,
     });
     new AutoLogConstruct(this, 'AutoLog');
+    new DbMetricsConstruct(this, 'DbMetrics', {});
   }
 
   static propsFromContext(app: App): OverwatchSupportStackProps {
