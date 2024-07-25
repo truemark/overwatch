@@ -11,7 +11,6 @@ import {AlertsTopic} from 'truemark-cdk-lib/aws-centergauge';
 import {InstallTagFunction} from './install/install-tag-function';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as process from 'process';
 import {Stack} from 'aws-cdk-lib';
 
 /**
@@ -24,11 +23,7 @@ export class OverwatchSupportConstruct extends Construct {
     super(scope, id);
 
     const alertsTopic = new AlertsTopic(this, 'AlertsTopic', {
-<<<<<<< Updated upstream
       topicName: 'OverwatchAlerts',
-=======
-      displayName: 'OverwatchAlerts',
->>>>>>> Stashed changes
       url: 'https://ingest.centergauge.com/',
     });
 
