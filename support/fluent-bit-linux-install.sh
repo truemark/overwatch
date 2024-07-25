@@ -178,6 +178,7 @@ FLUENT_BIT_CONFIG=$(cat << EOF
     Add_label           instance $instanceId
     Add_label           private_ip $instancePrivateIp
     Add_label           local_hostname $instanceHostname
+    Add_label           job ec2
     # AWS credentials
     aws_auth            on
     aws_region          $region
