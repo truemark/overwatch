@@ -152,7 +152,7 @@ export class Overwatch extends Construct {
       adminGroups: grafanaConfig.adminGroups,
       editorGroups: grafanaConfig.editorGroups,
     });
-    workspace.addAssumeRole('arn:aws:iam::*:role/ObservabilityDataSourceRole');
+    workspace.addAssumeRole('arn:aws:iam::*:role/OverwatchObservability');
   }
 
   private createLogsBucket(
