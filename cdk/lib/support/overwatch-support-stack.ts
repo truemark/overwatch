@@ -32,6 +32,7 @@ export class OverwatchSupportStack extends ExtendedStack {
       );
       const role = new Role(this, 'OverwatchObservability', {
         assumedBy: trustRelationships,
+        roleName: 'OverwatchObservability',
         description:
           'This role is used to allow grafana to access logs and metrics.',
       });
