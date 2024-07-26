@@ -79,6 +79,7 @@ $configContent = @"
     Retry_Limit         False
     tls                 On
     tls.verify          On
+    Add_label           job ec2
     Add_label           host $hostname
     Add_label           instance $instanceId
     Add_label           private_ip $instancePrivateIp
