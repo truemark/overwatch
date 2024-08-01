@@ -264,12 +264,6 @@ log-pipeline:
           serverless: false
           region: "${region}"
           sts_role_arn: "${stsRoleArn}"
-        dlq:
-          s3:
-            bucket: "${bucketName}"
-            key_path_prefix: "dlq/${pipelineName}/%{yyyy}/%{MM}/%{dd}"
-            region: "${region}"
-            sts_role_arn: "${stsRoleArn}"
 `;
 }
 

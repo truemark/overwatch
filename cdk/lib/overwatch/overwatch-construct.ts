@@ -105,6 +105,8 @@ export class Overwatch extends Construct {
       dataNodes: 2,
       iops: 3000,
       throughput: 250,
+      maxClauseCount: '4096',
+      fieldDataCacheSize: '40',
     });
     // Attach the necessary permissions for ISM actions
     openSearchMasterRole.addToPolicy(

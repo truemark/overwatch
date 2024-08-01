@@ -154,6 +154,16 @@ export interface StandardDomainProps {
    * The number of availability zones to use. Default is 2.
    */
   readonly availabilityZoneCount?: number;
+
+  /**
+   * The max clause count to use. Default is 1000.
+   */
+  readonly maxClauseCount?: string;
+
+  /**
+   * The field data cache size to use. Default is 20.
+   */
+  readonly fieldDataCacheSize?: string;
 }
 
 /**
@@ -237,6 +247,10 @@ export class StandardDomain extends Construct {
         : undefined,
       zoneAwareness: {
         availabilityZoneCount: props.availabilityZoneCount ?? 2,
+      },
+      advancedOptions: {
+        'indices.fielddata.cache.size': props.fieldDataCacheSize ?? '20',
+        'indices.query.bool.max_clause_count': props.maxClauseCount ?? '1000',
       },
     });
 
