@@ -18,7 +18,7 @@ import {
   getOpenSearchEndpoint,
   getOpenSearchClient,
   OpenSearchClient,
-} from './open-search-helper';
+} from './open-search-helper.mjs';
 
 // Constants for configuration
 const REGION = process.env.AWS_REGION!;
@@ -27,6 +27,7 @@ const log = logging.getLogger('main-handler');
 const sqsClient = new SQSClient({});
 
 // Extracts bucket name and object key from the event
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractBucketDetails(event: any) {
   return {
     bucketName: event.detail.bucket.name,
@@ -45,7 +46,8 @@ async function ensurePipelineExists(
   indexName: string,
   queueUrl: string,
   bucketName: string,
-  log: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  log: any,
 ) {
   const osisClient = new OSISClient({region: REGION});
 
@@ -78,8 +80,9 @@ async function createPipeline(
   pipelineName: string,
   indexName: string,
   queueUrl: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  log: any,
   bucketName: string,
-  log: any
 ) {
   const logGroupName = `/aws/vendedlogs/${pipelineName}`;
   await ensureLogGroupExists(logGroupName, pipelineName, log);
@@ -96,9 +99,9 @@ async function createPipeline(
     // TODO This means the code will need to handle updating already existing pipelines
     JSON.stringify({
       settings: {
-        number_of_shards: 2,
-        number_of_replicas: 0,
-        refresh_interval: '30s',
+        'number_of_shards': 2,
+        'number_of_replicas': 0,
+        'refresh_interval': '30s',
         'index.queries.cache.enabled': true,
         'index.requests.cache.enable': true,
         'index.mapping.total_fields.limit': 3000,
@@ -111,7 +114,7 @@ async function createPipeline(
           },
         },
       },
-    })
+    }),
   );
 
   const input = {
@@ -146,7 +149,8 @@ async function createPipeline(
 // Creates an SQS queue if it doesn't exist
 async function createQueueIfNeeded(
   indexName: string,
-  log: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  log: any,
 ): Promise<string> {
   const queueName = `overwatch-${indexName}-queue`;
   try {
@@ -161,7 +165,7 @@ async function createQueueIfNeeded(
           'automation:url': 'https://github.com/truemark/overwatch',
           'automation:component-id': 'overwatch',
         },
-      })
+      }),
     );
     log.info().str('queueName', queueName).msg('SQS Queue created');
     return QueueUrl || '';
@@ -174,15 +178,17 @@ async function createQueueIfNeeded(
 // Sends a message to the specified SQS queue
 async function sendMessageToQueue(
   queueUrl: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   messageBody: any,
-  log: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  log: any,
 ) {
   try {
     const {MessageId} = await sqsClient.send(
       new SendMessageCommand({
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify(messageBody),
-      })
+      }),
     );
     log.info().str('messageId', MessageId).msg('Message sent to SQS Queue');
   } catch (error) {
@@ -194,7 +200,8 @@ async function sendMessageToQueue(
 async function ensureLogGroupExists(
   logGroupName: string,
   pipelineName: string,
-  log: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  log: any,
 ) {
   const cwlClient = new CloudWatchLogsClient({region: REGION});
 
@@ -224,7 +231,7 @@ function generateLogPipelineYaml(
   bucketName: string,
   pipelineName: string,
   queueUrl: string,
-  indexMapping: string
+  indexMapping: string,
 ) {
   return `
 version: "2"
@@ -246,12 +253,13 @@ log-pipeline:
         region: "${region}"
         sts_role_arn: "${stsRoleArn}"
   processor:
+    - substitute_string:
+        entries:
+          - source: "message"
+            from: "^.*info\\\\s\\\\{"
+            to: "{"
     - parse_json:
-    - date:
-        from_time_received: true
-        destination: "ingest_timestamp"
-    - delete_entries:
-        with_keys: ["s3"]
+        parse_when: '/message =~ "^[{].*"'
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]
@@ -267,10 +275,11 @@ log-pipeline:
 `;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createS3Notification = (event: any) => {
   const s3BucketArn = event.resources.find(
     (resource: string) =>
-      resource === `arn:aws:s3:::${event.detail.bucket.name}`
+      resource === `arn:aws:s3:::${event.detail.bucket.name}`,
   );
 
   const s3Notification = {
@@ -325,6 +334,7 @@ async function createIndexPattern(client: OpenSearchClient, indexName: string) {
 }
 
 // Main handler function
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function handler(event: any): Promise<void> {
   await logging.initialize({
     svc: 'overwatch',
@@ -359,6 +369,6 @@ export async function handler(event: any): Promise<void> {
     indexName,
     queueUrl,
     bucketName,
-    log
+    log,
   );
 }

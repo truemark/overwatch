@@ -5,7 +5,7 @@ import {
   STSClient,
 } from '@aws-sdk/client-sts';
 import {Client} from '@opensearch-project/opensearch';
-import {DeepPartial} from './ts-helper';
+import {DeepPartial} from './ts-helper.mjs';
 
 const stsClient = new STSClient({});
 
@@ -54,7 +54,7 @@ export interface IsmPolicy {
   states: Array<{
     name: string;
     actions: Array<{
-      warm_migration: {};
+      warm_migration: object;
       action_type: string;
       retry: {
         count: number;
@@ -65,7 +65,7 @@ export interface IsmPolicy {
         value: number;
         unit: string;
       };
-      delete: {};
+      delete: object;
     }>;
     transitions: null | Array<{
       state_name: string;
@@ -110,6 +110,7 @@ export interface RoleMappingUpdate {
 export interface IndexPatternConfig {
   title: string;
   timeFieldName?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fields?: any;
 }
 
@@ -131,7 +132,7 @@ export class OpenSearchClient extends Client {
       policyId: string,
       policy: PartialIsmPolicy,
       seqNo?: number,
-      primaryTerm?: number
+      primaryTerm?: number,
     ): Promise<void> => {
       const path = `/_plugins/_ism/policies/${policyId}`;
       const querystring: Record<string, string | number> = {};
@@ -163,7 +164,7 @@ export class OpenSearchClient extends Client {
 
     updateRoleMapping: async (
       name: string,
-      mapping: RoleMappingUpdate
+      mapping: RoleMappingUpdate,
     ): Promise<void> => {
       const path = `/_plugins/_security/api/rolesmapping/${name}`;
       await this.transport.request({
@@ -182,14 +183,14 @@ export class OpenSearchClient extends Client {
   kib = {
     createIndexPattern: async (
       indexPatternId: string,
-      config: IndexPatternConfig
+      config: IndexPatternConfig,
     ): Promise<void> => {
       const path = `/.kibana_1/_doc/index-pattern:${indexPatternId}`;
       await this.transport.request({
         method: 'PUT',
         path,
         body: {
-          type: 'index-pattern',
+          'type': 'index-pattern',
           'index-pattern': {
             title: config.title,
             timeFieldName: config.timeFieldName,
@@ -206,7 +207,7 @@ export async function getOpenSearchClient(): Promise<OpenSearchClient> {
     new AssumeRoleCommand({
       RoleArn: getConfig().masterRoleArn,
       RoleSessionName: 'overwatch-config-handler',
-    })
+    }),
   );
   if (response.Credentials === undefined) {
     throw new Error('No credentials returned from AssumeRole');

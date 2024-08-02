@@ -3,7 +3,7 @@ import {
   getOpenSearchClient,
   OpenSearchClient,
   PartialIsmPolicy,
-} from './open-search-helper';
+} from './open-search-helper.mjs';
 
 const log = logging.getLogger('config-handler');
 
@@ -60,7 +60,7 @@ async function createOrUpdateISMPolicy(client: OpenSearchClient) {
     policyId,
     policy,
     policyVersion._seq_no,
-    policyVersion._primary_term
+    policyVersion._primary_term,
   );
   log.info().str('policyId', policyId).msg('Policy updated');
 }

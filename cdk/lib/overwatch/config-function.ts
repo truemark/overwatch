@@ -21,7 +21,7 @@ export class ConfigFunction extends ExtendedNodejsFunction {
         '..',
         'handlers',
         'src',
-        'config-handler.ts'
+        'config-handler.mts'
       ),
       architecture: Architecture.ARM_64,
       handler: 'handler',

@@ -124,6 +124,18 @@ export class StandardWorkspace extends ExtendedConstruct {
         resources: ['*'],
       })
     );
+    this.role.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          'sns:GetTopicAttributes',
+          'sns:Subscribe',
+          'sns:Unsubscribe',
+          'sns:Publish',
+        ],
+        resources: ['*'],
+      })
+    );
     this.role.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName('AWSXrayReadOnlyAccess')
     );
@@ -137,6 +149,7 @@ export class StandardWorkspace extends ExtendedConstruct {
       roleArn: this.role.roleArn,
       pluginAdminEnabled: true, // Needed for new alerting
       grafanaVersion: props?.version ?? DEFAULT_GRAFANA_VERSION,
+      notificationDestinations: ['SNS'],
       // Disabled temporarily until the plugin works better
       // dataSources: [
       //   'AMAZON_OPENSEARCH_SERVICE',
