@@ -23,7 +23,7 @@ export class OverwatchSupportConstruct extends Construct {
     super(scope, id);
 
     const alertsTopic = new AlertsTopic(this, 'AlertsTopic', {
-      topicName: 'OverwatchAlerts',
+      displayName: 'OverwatchAlerts',
       url: 'https://ingest.centergauge.com/',
     });
 
