@@ -58,7 +58,7 @@ export interface StandardDomainProps {
   /**
    * The number of warm nodes to create. Default is 0.
    */
-  readonly warmModes?: number;
+  readonly warmNodes?: number;
 
   /**
    * The instance type for warm nodes. Default is ultrawarm1.medium.search.
@@ -154,6 +154,16 @@ export interface StandardDomainProps {
    * The number of availability zones to use. Default is 2.
    */
   readonly availabilityZoneCount?: number;
+
+  /**
+   * The max clause count to use. Default is 1000.
+   */
+  readonly maxClauseCount?: string;
+
+  /**
+   * The field data cache size to use. Default is 20.
+   */
+  readonly fieldDataCacheSize?: string;
 }
 
 /**
@@ -191,7 +201,7 @@ export class StandardDomain extends Construct {
           props.masterNodeInstanceType ?? 'm6g.large.search',
         dataNodes: props.dataNodes ?? 2,
         dataNodeInstanceType: props.dataNodeInstanceType ?? 'r6g.large.search',
-        warmNodes: props.warmModes ?? 0,
+        warmNodes: props.warmNodes ?? 0,
         warmInstanceType:
           props.warmNodeInstanceType ?? 'ultrawarm1.medium.search',
         multiAzWithStandbyEnabled: props.multiAzWithStandbyEnabled ?? false,
@@ -237,6 +247,10 @@ export class StandardDomain extends Construct {
         : undefined,
       zoneAwareness: {
         availabilityZoneCount: props.availabilityZoneCount ?? 2,
+      },
+      advancedOptions: {
+        'indices.fielddata.cache.size': props.fieldDataCacheSize ?? '20',
+        'indices.query.bool.max_clause_count': props.maxClauseCount ?? '1000',
       },
     });
 

@@ -30,8 +30,8 @@ const sqsClient = new SQSClient({});
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractBucketDetails(event: any) {
   return {
-    bucketName: event.detail.requestParameters.bucketName,
-    objectKey: event.detail.requestParameters.key,
+    bucketName: event.detail.bucket.name,
+    objectKey: event.detail.object.key,
   };
 }
 
@@ -45,6 +45,7 @@ async function ensurePipelineExists(
   pipelineName: string,
   indexName: string,
   queueUrl: string,
+  bucketName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   log: any,
 ) {
@@ -62,7 +63,7 @@ async function ensurePipelineExists(
         .info()
         .str('pipelineName', pipelineName)
         .msg('Pipeline not found, creating new pipeline...');
-      await createPipeline(pipelineName, indexName, queueUrl, log);
+      await createPipeline(pipelineName, indexName, queueUrl, bucketName, log);
 
       //Create index pattern
       const client = await getOpenSearchClient();
@@ -81,6 +82,7 @@ async function createPipeline(
   queueUrl: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   log: any,
+  bucketName: string,
 ) {
   const logGroupName = `/aws/vendedlogs/${pipelineName}`;
   await ensureLogGroupExists(logGroupName, pipelineName, log);
@@ -90,16 +92,19 @@ async function createPipeline(
     indexName,
     REGION,
     opensearchRoleArn,
+    bucketName,
+    pipelineName,
     queueUrl,
     // TODO We want to adjust the number of shards dynamically between a min and max value passed in as parameters
     // TODO This means the code will need to handle updating already existing pipelines
     JSON.stringify({
       settings: {
-        'number_of_shards': 20,
+        'number_of_shards': 2,
         'number_of_replicas': 0,
         'refresh_interval': '30s',
         'index.queries.cache.enabled': true,
         'index.requests.cache.enable': true,
+        'index.mapping.total_fields.limit': 3000,
       },
       mappings: {
         properties: {
@@ -203,14 +208,9 @@ async function ensureLogGroupExists(
   try {
     // Try to create the log group (idempotent if it already exists)
     await cwlClient.send(new CreateLogGroupCommand({logGroupName}));
-    // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
-
     log.info().str('logGroupName', logGroupName).msg('Log group ensured.');
   } catch (error) {
     if ((error as Error).name === 'ResourceAlreadyExistsException') {
-      //Always ensure policy is created
-      // await createNewPolicyForLogGroup(logGroupName, pipelineName, log);
-
       log
         .info()
         .str('logGroupName', logGroupName)
@@ -228,6 +228,8 @@ function generateLogPipelineYaml(
   indexName: string,
   region: string,
   stsRoleArn: string,
+  bucketName: string,
+  pipelineName: string,
   queueUrl: string,
   indexMapping: string,
 ) {
@@ -236,9 +238,10 @@ version: "2"
 log-pipeline:
   source:
     s3:
-      acknowledgments: true
+      acknowledgments: false
       notification_type: "sqs"
       compression: "gzip"
+      records_to_accumulate: 1000
       codec:
         newline:
       sqs:
@@ -262,6 +265,7 @@ log-pipeline:
         hosts: ["${opensearchHost}"]
         index: "logs-${indexName}-%{yyyy.MM.dd}"
         index_type: "custom"
+        bulk_size: 15
         template_content: |
           ${indexMapping}
         aws:
@@ -273,28 +277,27 @@ log-pipeline:
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createS3Notification = (event: any) => {
-  const eventData = event.detail;
-  const s3BucketArn = eventData.resources.find(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (resource: any) => resource.type === 'AWS::S3::Bucket',
-  ).ARN;
+  const s3BucketArn = event.resources.find(
+    (resource: string) =>
+      resource === `arn:aws:s3:::${event.detail.bucket.name}`,
+  );
 
   const s3Notification = {
     Records: [
       {
         eventVersion: '2.1',
         eventSource: 'aws:s3',
-        awsRegion: eventData.awsRegion,
-        eventTime: eventData.eventTime,
+        awsRegion: event.region,
+        eventTime: event.time,
         eventName: 'ObjectCreated:Put',
         s3: {
           bucket: {
-            name: eventData.requestParameters.bucketName,
+            name: event.detail.bucket.name,
             arn: s3BucketArn,
           },
           object: {
-            key: eventData.requestParameters.key,
-            size: eventData.additionalEventData.bytesTransferredIn,
+            key: event.detail.object.key,
+            size: event.detail.object.size,
           },
         },
       },
@@ -306,7 +309,6 @@ const createS3Notification = (event: any) => {
 
 async function createIndexPattern(client: OpenSearchClient, indexName: string) {
   const indexPatternId = 'logs-' + indexName;
-  // Define the index pattern configuration
   const indexPatternConfig = {
     title: `${indexPatternId}*`,
     timeFieldName: 'ingest_timestamp',
@@ -321,7 +323,6 @@ async function createIndexPattern(client: OpenSearchClient, indexName: string) {
   };
 
   try {
-    // Create the index pattern
     await client.kib.createIndexPattern(indexPatternId, indexPatternConfig);
     log
       .info()
@@ -340,13 +341,16 @@ export async function handler(event: any): Promise<void> {
     level: 'trace',
   });
 
-  log.trace().unknown('event', event).msg('Received S3 event'); //TODO: Remove for PROD deployment
+  // Enable for debugging if needed
+  //log.trace().unknown('event', event).msg('Received S3 event');
 
-  //Validate region env var
+  // Validate region env var
   if (!REGION) {
     log.error().msg('Cannot find env var OS_REGION');
     return;
   }
+
+  // Extract bucket name and object key from the EventBridge event
   const {bucketName, objectKey} = extractBucketDetails(event);
   if (!bucketName || !objectKey) {
     log.error().msg('Missing bucket name or object key in the event detail');
@@ -360,5 +364,11 @@ export async function handler(event: any): Promise<void> {
   const messageBody = createS3Notification(event);
 
   await sendMessageToQueue(queueUrl, messageBody, log);
-  await ensurePipelineExists(pipelineName, indexName, queueUrl, log);
+  await ensurePipelineExists(
+    pipelineName,
+    indexName,
+    queueUrl,
+    bucketName,
+    log,
+  );
 }
