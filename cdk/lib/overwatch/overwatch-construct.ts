@@ -101,7 +101,7 @@ export class Overwatch extends Construct {
       // writeAccess: [new AccountRootPrincipal()], // TODO This didn't work.
       writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
       hostedDomainName: logsConfig.hostedDomainName,
-      dataNodeInstanceType: 'r6g.large.search',
+      dataNodeInstanceType: 'r6g.xlarge.search',
       dataNodes: 2,
       iops: 3000,
       throughput: 250,
