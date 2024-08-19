@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import {ExtendedApp} from 'truemark-cdk-lib/aws-cdk';
-import {OverwatchStack} from '../lib/overwatch';
-import {OverwatchSupportStack} from '../lib/support';
+import {OverwatchStack} from '../lib/overwatch-stack';
 
 const app = new ExtendedApp({
   standardTags: {
@@ -13,14 +12,4 @@ const app = new ExtendedApp({
   },
 });
 
-const stack = app.node.tryGetContext('stack');
-if (!stack) {
-  throw new Error('stack is required in context');
-}
-if (stack === 'overwatch') {
-  OverwatchStack.fromContext(app, 'Overwatch');
-} else if (stack === 'support') {
-  OverwatchSupportStack.fromContext(app, 'OverwatchSupport');
-} else {
-  throw new Error(`Unknown stack: ${stack}`);
-}
+OverwatchStack.fromContext(app, 'Overwatch');

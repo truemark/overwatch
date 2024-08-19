@@ -8,8 +8,8 @@ import {
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
-import {CfnOutput, Duration, Stack} from 'aws-cdk-lib';
-import {Bucket, BucketEncryption, EventType} from 'aws-cdk-lib/aws-s3';
+import {CfnOutput, Stack} from 'aws-cdk-lib';
+import {Bucket, BucketEncryption} from 'aws-cdk-lib/aws-s3';
 import {MainFunction} from './main-function';
 import {Rule} from 'aws-cdk-lib/aws-events';
 import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
