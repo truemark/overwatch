@@ -26,7 +26,7 @@ export interface LogsConfig {
   readonly hostedDomainName?: HostedDomainNameProps;
   readonly accountIds: string[];
   readonly dataNodeInstanceType: string;
-  readonly devRoleBackedndIds: string;
+  readonly devRoleBackendIds: string;
 }
 
 export interface GrafanaConfig {
@@ -144,7 +144,7 @@ export class Overwatch extends Construct {
     });
     configFunction.addEnvironment(
       'DEVELOPER_ROLE_BACKEND_GROUPS',
-      logsConfig.devRoleBackedndIds
+      logsConfig.devRoleBackendIds
     );
   }
 

@@ -91,9 +91,9 @@ export class OverwatchStack extends ExtendedStack {
       if (!dataNodeInstanceType) {
         throw new Error('Missing dataNodeInstanceType in context');
       }
-      const devRoleBackedndIds = app.node.tryGetContext('devRoleBackedndIds');
-      if (!devRoleBackedndIds) {
-        throw new Error('Missing devRoleBackedndIds in context');
+      const devRoleBackendIds = app.node.tryGetContext('devRoleBackendIds');
+      if (!devRoleBackendIds) {
+        throw new Error('Missing devRoleBackendIds in context');
       }
       accountIds = accountIds.split(',');
       logsConfig = {
@@ -110,7 +110,7 @@ export class OverwatchStack extends ExtendedStack {
         },
         accountIds,
         dataNodeInstanceType,
-        devRoleBackedndIds,
+        devRoleBackendIds,
       };
     }
     return {

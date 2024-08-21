@@ -34,7 +34,7 @@ npx aws-cdk@2.x deploy \
 -c organizationalUnits="{{ organizationalUnits }}" \
 -c volumeSize="{{ volumeSize }}" \
 -c dataNodeInstanceType="{{ dataNodeInstanceType }}" \
--c devRoleBackedndIds="{{ devRoleBackedndIds }}" \
+-c devRoleBackendIds="{{ devRoleBackendIds }}" \
 ```
 
 ## Overwatch Support Install
