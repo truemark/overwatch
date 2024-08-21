@@ -25,6 +25,8 @@ export interface LogsConfig {
   readonly masterBackendRole: string;
   readonly hostedDomainName?: HostedDomainNameProps;
   readonly accountIds: string[];
+  readonly dataNodeInstanceType: string;
+  readonly devRoleBackedndIds: string;
 }
 
 export interface GrafanaConfig {
@@ -101,7 +103,7 @@ export class Overwatch extends Construct {
       // writeAccess: [new AccountRootPrincipal()], // TODO This didn't work.
       writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
       hostedDomainName: logsConfig.hostedDomainName,
-      dataNodeInstanceType: 'r6g.xlarge.search',
+      dataNodeInstanceType: logsConfig.dataNodeInstanceType,
       dataNodes: 2,
       iops: 3000,
       throughput: 250,
@@ -135,11 +137,15 @@ export class Overwatch extends Construct {
       `https://${domain.domainEndpoint}`
     );
     mainFunction.addEnvironment('OSIS_ROLE_ARN', osAccessRole.roleArn);
-    new ConfigFunction(this, 'ConfigFunction', {
+    const configFunction = new ConfigFunction(this, 'ConfigFunction', {
       openSearchMasterRole: openSearchMasterRole,
       openSearchEndpoint: domain.domainEndpoint,
       openSearchAccessRole: osAccessRole,
     });
+    configFunction.addEnvironment(
+      'DEVELOPER_ROLE_BACKEND_GROUPS',
+      logsConfig.devRoleBackedndIds
+    );
   }
 
   private grafanaSetup(grafanaConfig: GrafanaConfig): void {

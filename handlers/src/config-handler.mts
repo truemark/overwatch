@@ -4,10 +4,7 @@ import {
   OpenSearchClient,
   PartialIsmPolicy,
 } from './open-search-helper.mjs';
-import {
-  developerRoleDefinition,
-  developerRoleMappings,
-} from './role-definitions.mjs';
+import {developerRoleDefinition} from './role-definitions.mjs';
 import {deleteLogsAfter90DaysPolicy} from './ism-policies.mjs';
 
 const log = logging.getLogger('config-handler');
@@ -112,21 +109,35 @@ async function updateRoleMappings(client: OpenSearchClient) {
 async function createOrUpdateDeveloperRole(client: OpenSearchClient) {
   const roleName = 'Developer';
 
+  // Split the environment variable into an array or default to an empty array if not present
+  const developerRoleBackendGroups =
+    process.env.DEVELOPER_ROLE_BACKEND_GROUPS?.split(',') ?? [];
+
   try {
-    // Create/Update the role (creates the role if it doesn't exist)
+    // Attempt to create or update the role
     const response = await client.sec.updateRole(
       roleName,
       developerRoleDefinition,
     );
-    // Check if the role was created or updated successfully
+
+    // Check if the operation was successful
     if (response.status === 'CREATED' || response.status === 'OK') {
-      // Update role mapping with backend roles
+      const developerRoleMappings = {
+        backend_roles: developerRoleBackendGroups,
+        users: [],
+        hosts: [],
+      };
+
+      // Update the role mapping with the backend roles
       await client.sec.updateRoleMapping(roleName, developerRoleMappings);
+
+      // Log success
       log
         .info()
         .str('roleName', roleName)
         .msg('Role created/updated and role mapping applied.');
     } else {
+      // Log failure to create/update the role
       log
         .error()
         .str('roleName', roleName)
@@ -134,6 +145,7 @@ async function createOrUpdateDeveloperRole(client: OpenSearchClient) {
         .msg('Role was not created/updated successfully.');
     }
   } catch (error) {
+    // Handle and log errors during the process
     log
       .error()
       .str('roleName', roleName)

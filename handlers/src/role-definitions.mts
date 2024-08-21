@@ -56,9 +56,3 @@ export const developerRoleDefinition = {
     },
   ],
 };
-
-export const developerRoleMappings = {
-  backend_roles: ['92672f1b60-b803e9e6-0f09-4ed9-b8c8-83186dd674a6'],
-  users: [],
-  hosts: [],
-};
