@@ -18,6 +18,7 @@ import {HostedDomainNameProps, StandardDomain} from './standard-domain';
 import {ResourcePolicy} from 'aws-cdk-lib/aws-logs';
 import {ConfigFunction} from './config-function';
 import {StandardWorkspace} from './standard-workspace';
+import {EngineVersion} from 'aws-cdk-lib/aws-opensearchservice';
 export interface LogsConfig {
   readonly volumeSize?: number;
   readonly idpEntityId: string;
@@ -94,6 +95,7 @@ export class Overwatch extends Construct {
 
     // Create OpenSearch Domain
     const domain = new StandardDomain(this, 'Domain', {
+      engineVersion: EngineVersion.OPENSEARCH_2_13,
       domainName: 'logs',
       masterUserArn: openSearchMasterRole.roleArn,
       idpEntityId: logsConfig.idpEntityId,
