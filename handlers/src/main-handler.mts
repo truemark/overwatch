@@ -344,7 +344,7 @@ export async function handler(event: any): Promise<void> {
   // Enable for debugging if needed
   //log.trace().unknown('event', event).msg('Received S3 event');
 
-  // Validate region env var
+  // Validate region environment var
   if (!REGION) {
     log.error().msg('Cannot find env var OS_REGION');
     return;

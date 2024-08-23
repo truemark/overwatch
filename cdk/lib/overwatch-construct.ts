@@ -8,8 +8,8 @@ import {
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
-import {CfnOutput, Duration, Stack} from 'aws-cdk-lib';
-import {Bucket, BucketEncryption, EventType} from 'aws-cdk-lib/aws-s3';
+import {CfnOutput, Stack} from 'aws-cdk-lib';
+import {Bucket, BucketEncryption} from 'aws-cdk-lib/aws-s3';
 import {MainFunction} from './main-function';
 import {Rule} from 'aws-cdk-lib/aws-events';
 import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
@@ -107,7 +107,7 @@ export class Overwatch extends Construct {
       hostedDomainName: logsConfig.hostedDomainName,
       dataNodeInstanceType: logsConfig.dataNodeInstanceType,
       dataNodes: 2,
-      iops: 3000,
+      iops: 7500,
       throughput: 250,
       maxClauseCount: '4096',
       fieldDataCacheSize: '40',
