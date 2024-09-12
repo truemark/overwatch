@@ -98,8 +98,8 @@ async function createPipeline(
         'number_of_shards': 6,
         'number_of_replicas': 0,
         'refresh_interval': '30s',
-        'index.queries.cache.enabled': true,
-        'index.requests.cache.enable': true,
+        'index.queries.cache.enabled': false,
+        'index.requests.cache.enable': false,
         'index.mapping.total_fields.limit': 3000,
       },
       mappings: {
