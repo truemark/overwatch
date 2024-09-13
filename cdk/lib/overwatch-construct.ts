@@ -311,12 +311,12 @@ export class Overwatch extends Construct {
       })
     );
 
-    // Firehose Extended S3 Destination Configuration
+    // Firehose Extended S3 Destination Configuration for Prod
     const prodExtendedS3DestinationConfig = {
       roleArn: firehoseRole.roleArn,
       bucketArn: logsBucket.bucketArn,
       deliveryStreamType: 'DirectPut',
-      prefix: `autolog/prod/${Stack.of(this).account}/${Stack.of(this).region}}/`,
+      prefix: `autolog/prod/${Stack.of(this).account}/${Stack.of(this).region}/`,
       bufferingHints: {
         sizeInMBs: 128,
         intervalInSeconds: 60,
@@ -353,14 +353,36 @@ export class Overwatch extends Construct {
       extendedS3DestinationConfiguration: nonProdExtendedS3DestinationConfig,
     });
 
+    // Firehose Extended S3 Destination Configuration for Syslog
+    const syslogExtendedS3DestinationConfig = {
+      ...prodExtendedS3DestinationConfig, // Reuse the same configuration with minor modifications
+      prefix: `autolog/syslog/${Stack.of(this).account}/${Stack.of(this).region}/`,
+      cloudWatchLoggingOptions: {
+        enabled: true,
+        logGroupName: '/aws/kinesisfirehose/syslog-logs',
+        logStreamName: 'syslog-logs',
+      },
+    };
+
+    // Create Kinesis Firehose Delivery Stream for Syslog
+    const syslogFirehose = new CfnDeliveryStream(this, 'SyslogFirehose', {
+      deliveryStreamName: 'syslog-os-logs',
+      extendedS3DestinationConfiguration: syslogExtendedS3DestinationConfig,
+    });
+
     // Create IAM user with permissions to write to Firehose
     const firehoseLogsUser = new User(this, 'FirehoseLogsUser', {
       userName: 'oslogs',
     });
+
     firehoseLogsUser.addToPolicy(
       new PolicyStatement({
         actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
-        resources: [prodLogsFirehose.attrArn, nonprodLogsFirehose.attrArn],
+        resources: [
+          prodLogsFirehose.attrArn,
+          nonprodLogsFirehose.attrArn,
+          syslogFirehose.attrArn,
+        ], // Add syslog Firehose ARN
       })
     );
   }
