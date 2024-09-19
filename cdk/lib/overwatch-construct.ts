@@ -355,7 +355,7 @@ export class Overwatch extends Construct {
 
     // Firehose Extended S3 Destination Configuration for Syslog
     const syslogExtendedS3DestinationConfig = {
-      ...prodExtendedS3DestinationConfig, // Reuse the same configuration with minor modifications
+      ...prodExtendedS3DestinationConfig,
       prefix: `autolog/syslog/${Stack.of(this).account}/${Stack.of(this).region}/`,
       cloudWatchLoggingOptions: {
         enabled: true,
@@ -382,7 +382,7 @@ export class Overwatch extends Construct {
           prodLogsFirehose.attrArn,
           nonprodLogsFirehose.attrArn,
           syslogFirehose.attrArn,
-        ], // Add syslog Firehose ARN
+        ],
       })
     );
   }
