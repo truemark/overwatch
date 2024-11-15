@@ -34,6 +34,10 @@ export interface GrafanaConfig {
   readonly organizationalUnits: string[];
   readonly adminGroups?: string[];
   readonly editorGroups?: string[];
+  readonly vpcConfiguration?: {
+    readonly subnetIds: string[];
+    readonly securityGroupIds: string[];
+  };
 }
 
 export interface OverwatchProps {
@@ -156,6 +160,16 @@ export class Overwatch extends Construct {
       organizationalUnits: grafanaConfig.organizationalUnits,
       adminGroups: grafanaConfig.adminGroups,
       editorGroups: grafanaConfig.editorGroups,
+      vpcConfiguration: grafanaConfig.vpcConfiguration,
+      // Disabled temporarily until the plugin works better
+      // dataSources:
+      // [
+      //   'AMAZON_OPENSEARCH_SERVICE',
+      //   'ATHENA',
+      //   'CLOUDWATCH',
+      //   'PROMETHEUS',
+      //   'XRAY',
+      // ],
     });
     workspace.addAssumeRole('arn:aws:iam::*:role/OverwatchObservability');
   }

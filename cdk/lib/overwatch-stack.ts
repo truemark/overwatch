@@ -39,10 +39,28 @@ export class OverwatchStack extends ExtendedStack {
       } else {
         organizationalUnits = organizationalUnits.split(',');
       }
+
+      const subnetIds = app.node.tryGetContext('grafanaVPCSubnetIds')
+        ? app.node.tryGetContext('grafanaVPCSubnetIds').split(',')
+        : undefined;
+
+      const securityGroupIds = app.node.tryGetContext(
+        'grafanaVPCSecurityGroupIds'
+      )
+        ? app.node.tryGetContext('grafanaVPCSecurityGroupIds').split(',')
+        : undefined;
+
       grafanaConfig = {
         adminGroups,
         editorGroups,
         organizationalUnits,
+        vpcConfiguration:
+          subnetIds && securityGroupIds
+            ? {
+                subnetIds,
+                securityGroupIds,
+              }
+            : undefined,
       };
     }
 
