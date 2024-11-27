@@ -5,6 +5,15 @@ export const developerRoleDefinition = {
     'cluster:monitor/health',
     'cluster_composite_ops_ro',
     'indices:data/write/bulk',
+    'cluster:admin/opendistro/reports/definition/create',
+    'cluster:admin/opendistro/reports/definition/update',
+    'cluster:admin/opendistro/reports/definition/on_demand',
+    'cluster:admin/opendistro/reports/definition/delete',
+    'cluster:admin/opendistro/reports/definition/get',
+    'cluster:admin/opendistro/reports/definition/list',
+    'cluster:admin/opendistro/reports/instance/list',
+    'cluster:admin/opendistro/reports/instance/get',
+    'cluster:admin/opendistro/reports/menu/download',
   ],
   index_permissions: [
     {
