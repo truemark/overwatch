@@ -275,6 +275,7 @@ export class StandardDomain extends Construct {
           'es:ESHttpPut',
           'es:ESHttpGet',
           'es:ESHttpDelete',
+          'es:ESHttpHead',
         ],
         effect: Effect.ALLOW,
         principals: [...(props.writeAccess ?? []), ingestionRole],
