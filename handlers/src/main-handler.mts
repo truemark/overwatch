@@ -46,8 +46,6 @@ async function ensurePipelineExists(
   indexName: string,
   queueUrl: string,
   bucketName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  log: any,
 ) {
   const osisClient = new OSISClient({region: REGION});
 
@@ -63,7 +61,7 @@ async function ensurePipelineExists(
         .info()
         .str('pipelineName', pipelineName)
         .msg('Pipeline not found, creating new pipeline...');
-      await createPipeline(pipelineName, indexName, queueUrl, bucketName, log);
+      await createPipeline(pipelineName, indexName, queueUrl, bucketName);
 
       //Create index pattern
       const client = await getOpenSearchClient();
@@ -80,12 +78,10 @@ async function createPipeline(
   pipelineName: string,
   indexName: string,
   queueUrl: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  log: any,
   bucketName: string,
 ) {
   const logGroupName = `/aws/vendedlogs/${pipelineName}`;
-  await ensureLogGroupExists(logGroupName, pipelineName, log);
+  await ensureLogGroupExists(logGroupName);
   const opensearchRoleArn = process.env.OSIS_ROLE_ARN || '';
   const pipelineConfigurationBody = generateLogPipelineYaml(
     `${getOpenSearchEndpoint()}`,
@@ -102,8 +98,8 @@ async function createPipeline(
         'number_of_shards': 6,
         'number_of_replicas': 0,
         'refresh_interval': '30s',
-        'index.queries.cache.enabled': true,
-        'index.requests.cache.enable': true,
+        'index.queries.cache.enabled': false,
+        'index.requests.cache.enable': false,
         'index.mapping.total_fields.limit': 3000,
       },
       mappings: {
@@ -131,6 +127,16 @@ async function createPipeline(
     BufferOptions: {
       PersistentBufferEnabled: false,
     },
+    Tags: [
+      {
+        Key: 'automation:id',
+        Value: process.env['AUTOMATION_ID'] ?? '',
+      },
+      {
+        Key: 'automation:url',
+        Value: process.env['AUTOMATION_URL'] ?? '',
+      },
+    ],
   };
   const osisClient = new OSISClient({region: REGION});
 
@@ -147,11 +153,7 @@ async function createPipeline(
 }
 
 // Creates an SQS queue if it doesn't exist
-async function createQueueIfNeeded(
-  indexName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  log: any,
-): Promise<string> {
+async function createQueueIfNeeded(indexName: string): Promise<string> {
   const queueName = `overwatch-${indexName}-queue`;
   try {
     const {QueueUrl} = await sqsClient.send(
@@ -180,8 +182,6 @@ async function sendMessageToQueue(
   queueUrl: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   messageBody: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  log: any,
 ) {
   try {
     const {MessageId} = await sqsClient.send(
@@ -190,19 +190,17 @@ async function sendMessageToQueue(
         MessageBody: JSON.stringify(messageBody),
       }),
     );
-    log.info().str('messageId', MessageId).msg('Message sent to SQS Queue');
+    log
+      .info()
+      .str('messageId', MessageId ?? '')
+      .msg('Message sent to SQS Queue');
   } catch (error) {
     log.error().err(error).msg('Failed to send message to SQS Queue');
     throw error;
   }
 }
 
-async function ensureLogGroupExists(
-  logGroupName: string,
-  pipelineName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  log: any,
-) {
+async function ensureLogGroupExists(logGroupName: string) {
   const cwlClient = new CloudWatchLogsClient({region: REGION});
 
   try {
@@ -260,6 +258,9 @@ log-pipeline:
             to: "{"
     - parse_json:
         parse_when: '/message =~ "^[{].*"'
+    - date:
+        from_time_received: true
+        destination: "ingest_timestamp"
   sink:
     - opensearch:
         hosts: ["${opensearchHost}"]
@@ -360,15 +361,9 @@ export async function handler(event: any): Promise<void> {
   const indexName = extractIndexName(objectKey);
   const pipelineName = `ingestion-pipeline-${indexName}`;
 
-  const queueUrl = await createQueueIfNeeded(indexName, log);
+  const queueUrl = await createQueueIfNeeded(indexName);
   const messageBody = createS3Notification(event);
 
-  await sendMessageToQueue(queueUrl, messageBody, log);
-  await ensurePipelineExists(
-    pipelineName,
-    indexName,
-    queueUrl,
-    bucketName,
-    log,
-  );
+  await sendMessageToQueue(queueUrl, messageBody);
+  await ensurePipelineExists(pipelineName, indexName, queueUrl, bucketName);
 }

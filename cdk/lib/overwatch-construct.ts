@@ -7,6 +7,7 @@ import {
   PolicyStatement,
   Role,
   ServicePrincipal,
+  User,
 } from 'aws-cdk-lib/aws-iam';
 import {CfnOutput, Stack} from 'aws-cdk-lib';
 import {Bucket, BucketEncryption} from 'aws-cdk-lib/aws-s3';
@@ -19,6 +20,7 @@ import {ResourcePolicy} from 'aws-cdk-lib/aws-logs';
 import {ConfigFunction} from './config-function';
 import {StandardWorkspace} from './standard-workspace';
 import {EngineVersion} from 'aws-cdk-lib/aws-opensearchservice';
+import {CfnDeliveryStream} from 'aws-cdk-lib/aws-kinesisfirehose';
 export interface LogsConfig {
   readonly volumeSize?: number;
   readonly idpEntityId: string;
@@ -93,6 +95,9 @@ export class Overwatch extends Construct {
 
     // S3 Bucket for log events storage
     const logsBucket = this.createLogsBucket(mainTarget, logsConfig.accountIds);
+
+    //Add Kinesis Firehose for logs
+    this.setupKinesisFirehose(logsBucket);
 
     // Setup EventBridge for S3 logs events
     this.setupEventBridge(logsBucket, mainTarget);
@@ -303,5 +308,96 @@ export class Overwatch extends Construct {
       description: 'Routes S3 events to Overwatch',
     });
     logsBucketRule.addTarget(mainTarget);
+  }
+
+  private async setupKinesisFirehose(logsBucket: Bucket): Promise<void> {
+    // Create IAM Role for Firehose to access S3
+    const firehoseRole = new Role(this, 'FirehoseRole', {
+      assumedBy: new ServicePrincipal('firehose.amazonaws.com'),
+    });
+
+    // Grant Firehose access to S3 bucket
+    firehoseRole.addToPolicy(
+      new PolicyStatement({
+        actions: ['s3:PutObject', 's3:PutObjectAcl'],
+        resources: [logsBucket.bucketArn, `${logsBucket.bucketArn}/*`],
+        effect: Effect.ALLOW,
+      })
+    );
+
+    // Firehose Extended S3 Destination Configuration for Prod
+    const prodExtendedS3DestinationConfig = {
+      roleArn: firehoseRole.roleArn,
+      bucketArn: logsBucket.bucketArn,
+      deliveryStreamType: 'DirectPut',
+      prefix: `autolog/prod/${Stack.of(this).account}/${Stack.of(this).region}/`,
+      bufferingHints: {
+        sizeInMBs: 128,
+        intervalInSeconds: 60,
+      },
+      compressionFormat: 'GZIP',
+      cloudWatchLoggingOptions: {
+        enabled: true,
+        logGroupName: '/aws/kinesisfirehose/prod-logs',
+        logStreamName: 'prod-logs',
+      },
+      s3BackupMode: 'Disabled',
+    };
+
+    // Create Kinesis Firehose Delivery Stream for Prod
+    const prodLogsFirehose = new CfnDeliveryStream(this, 'ProdFirehose', {
+      deliveryStreamName: 'prod-os-logs',
+      extendedS3DestinationConfiguration: prodExtendedS3DestinationConfig,
+    });
+
+    // Firehose Extended S3 Destination Configuration for Non-Production
+    const nonProdExtendedS3DestinationConfig = {
+      ...prodExtendedS3DestinationConfig,
+      prefix: `autolog/non-prod/${Stack.of(this).account}/${Stack.of(this).region}/`,
+      cloudWatchLoggingOptions: {
+        enabled: true,
+        logGroupName: '/aws/kinesisfirehose/non-prod-logs',
+        logStreamName: 'non-prod-logs',
+      },
+    };
+
+    // Create Kinesis Firehose Delivery Stream for Non-Prod
+    const nonprodLogsFirehose = new CfnDeliveryStream(this, 'NonProdFirehose', {
+      deliveryStreamName: 'non-prod-os-logs',
+      extendedS3DestinationConfiguration: nonProdExtendedS3DestinationConfig,
+    });
+
+    // Firehose Extended S3 Destination Configuration for Syslog
+    const syslogExtendedS3DestinationConfig = {
+      ...prodExtendedS3DestinationConfig,
+      prefix: `autolog/syslog/${Stack.of(this).account}/${Stack.of(this).region}/`,
+      cloudWatchLoggingOptions: {
+        enabled: true,
+        logGroupName: '/aws/kinesisfirehose/syslog-logs',
+        logStreamName: 'syslog-logs',
+      },
+    };
+
+    // Create Kinesis Firehose Delivery Stream for Syslog
+    const syslogFirehose = new CfnDeliveryStream(this, 'SyslogFirehose', {
+      deliveryStreamName: 'syslog-os-logs',
+      extendedS3DestinationConfiguration: syslogExtendedS3DestinationConfig,
+    });
+
+    // Create IAM user with permissions to write to Firehose
+    const firehoseLogsUser = new User(this, 'FirehoseLogsUser', {
+      userName: 'oslogs',
+    });
+
+    firehoseLogsUser.addToPolicy(
+      new PolicyStatement({
+        actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
+        resources: [
+          prodLogsFirehose.attrArn,
+          nonprodLogsFirehose.attrArn,
+          syslogFirehose.attrArn,
+        ],
+      })
+    );
   }
 }
