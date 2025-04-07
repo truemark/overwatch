@@ -30,6 +30,7 @@ export interface LogsConfig {
   readonly accountIds: string[];
   readonly dataNodeInstanceType: string;
   readonly devRoleBackendIds: string;
+  readonly enableAlarms?: boolean;
 }
 
 export interface GrafanaConfig {
@@ -120,6 +121,7 @@ export class Overwatch extends Construct {
       throughput: 250,
       maxClauseCount: '4096',
       fieldDataCacheSize: '40',
+      enableAlarms: logsConfig.enableAlarms,
     });
     // Attach the necessary permissions for ISM actions
     openSearchMasterRole.addToPolicy(

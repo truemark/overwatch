@@ -1,6 +1,6 @@
 import {Construct} from 'constructs';
 import {EngineVersion, Domain} from 'aws-cdk-lib/aws-opensearchservice';
-import {RemovalPolicy} from 'aws-cdk-lib';
+import {RemovalPolicy, Duration} from 'aws-cdk-lib';
 import {EbsDeviceVolumeType} from 'aws-cdk-lib/aws-ec2';
 import {
   Effect,
@@ -14,6 +14,12 @@ import {
   CertificateValidation,
 } from 'aws-cdk-lib/aws-certificatemanager';
 import {HostedZone, IHostedZone} from 'aws-cdk-lib/aws-route53';
+import {
+  Alarm,
+  ComparisonOperator,
+  Metric,
+  TreatMissingData,
+} from 'aws-cdk-lib/aws-cloudwatch';
 
 export interface HostedZoneAttributes {
   readonly hostedZoneId: string;
@@ -164,6 +170,12 @@ export interface StandardDomainProps {
    * The field data cache size to use. Default is 20.
    */
   readonly fieldDataCacheSize?: string;
+
+  /**
+   * Whether to enable alarms for the Opensearch.
+   * Default is `false`.
+   */
+  readonly enableAlarms?: boolean;
 }
 
 /**
@@ -284,5 +296,97 @@ export class StandardDomain extends Construct {
     );
     this.domainArn = this.domain.domainArn;
     this.domainEndpoint = this.domain.domainEndpoint;
+
+    if (props.enableAlarms) {
+      // Add CloudWatch alarms after domain creation
+      this.addCloudWatchAlarms();
+    }
+  }
+
+  private addCloudWatchAlarms() {
+    const openSearchNamespace = 'AWS/ES';
+    const domainName = this.domain.domainName;
+
+    // Cluster Health Status - Yellow
+    new Alarm(this, 'ClusterHealthYellow', {
+      metric: new Metric({
+        namespace: openSearchNamespace,
+        metricName: 'ClusterStatus.yellow',
+        dimensionsMap: {DomainName: domainName},
+        statistic: 'Maximum',
+        period: Duration.minutes(5),
+      }),
+      threshold: 1, // Yellow status is reported as 1
+      evaluationPeriods: 1,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription: `OpenSearch Cluster ${domainName} is in Yellow status.`,
+    });
+
+    // Alarm 2: Cluster Health Status - Red
+    new Alarm(this, 'ClusterHealthRed', {
+      metric: new Metric({
+        namespace: openSearchNamespace,
+        metricName: 'ClusterStatus.red',
+        dimensionsMap: {DomainName: domainName},
+        statistic: 'Maximum',
+        period: Duration.minutes(5),
+      }),
+      threshold: 1, // Red status is reported as 1
+      evaluationPeriods: 1,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription: `OpenSearch Cluster ${domainName} is in RED status! Immediate attention required.`,
+    });
+
+    // Alarm 3: Cluster Index Writes Blocked
+    new Alarm(this, 'ClusterIndexWritesBlocked', {
+      metric: new Metric({
+        namespace: openSearchNamespace,
+        metricName: 'ClusterIndexWritesBlocked',
+        dimensionsMap: {DomainName: domainName},
+        statistic: 'Maximum',
+        period: Duration.minutes(10),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: `OpenSearch Cluster ${domainName} is blocking index writes!`,
+    });
+
+    // Alarm: SQS Messages Received - Non-Prod
+    new Alarm(this, 'SQSMessagesReceivedNonProd', {
+      metric: new Metric({
+        namespace: 'AWS/OSIS',
+        metricName: 'log-pipeline.s3.sqsMessagesReceived.count',
+        dimensionsMap: {PipelineName: 'ingestion-pipeline-non-prod'},
+        statistic: 'Average',
+        period: Duration.minutes(15),
+      }),
+      threshold: 15, // If message count exceeds this, an alert is triggered
+      evaluationPeriods: 3,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: TreatMissingData.BREACHING,
+      alarmDescription:
+        'SQS Message count spiked unexpectedly in Non-Prod log pipeline. Potential high traffic or bottleneck detected.',
+    });
+
+    // Alarm: SQS Messages Received - Prod
+    new Alarm(this, 'SQSMessagesReceivedProd', {
+      metric: new Metric({
+        namespace: 'AWS/OSIS',
+        metricName: 'log-pipeline.s3.sqsMessagesReceived.count',
+        dimensionsMap: {PipelineName: 'ingestion-pipeline-prod'},
+        statistic: 'Average',
+        period: Duration.minutes(15),
+      }),
+      threshold: 15, // If message count exceeds this, an alert is triggered
+      evaluationPeriods: 3,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: TreatMissingData.BREACHING,
+      alarmDescription:
+        'SQS Message count spiked unexpectedly in Prod log pipeline. Potential high traffic or bottleneck detected.',
+    });
   }
 }
