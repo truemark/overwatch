@@ -40,7 +40,7 @@ function extractIndexName(objectKey: string) {
   return objectKey.split('/')[1]; // Assumes index name is part of the object key
 }
 
-// Ensures that the pipeline exists or creates a new one
+// Ensures that both the streaming and reingestion pipelines exist or creates them
 async function ensurePipelineExists(
   pipelineName: string,
   indexName: string,
@@ -49,25 +49,67 @@ async function ensurePipelineExists(
 ) {
   const osisClient = new OSISClient({region: REGION});
 
+  // Check and create streaming pipeline
   try {
     await osisClient.send(new GetPipelineCommand({PipelineName: pipelineName}));
     log
       .info()
       .str('pipelineName', pipelineName)
-      .msg('Pipeline already exists.');
+      .msg('Streaming pipeline already exists.');
   } catch (error) {
     if (error instanceof ResourceNotFoundException) {
       log
         .info()
         .str('pipelineName', pipelineName)
-        .msg('Pipeline not found, creating new pipeline...');
+        .msg('Streaming pipeline not found, creating new pipeline...');
       await createPipeline(pipelineName, indexName, queueUrl, bucketName);
-
-      //Create index pattern
-      const client = await getOpenSearchClient();
-      await createIndexPattern(client, indexName);
     } else {
-      log.error().err(error).msg('Error while checking pipeline existence');
+      log
+        .error()
+        .err(error)
+        .msg('Error while checking streaming pipeline existence');
+      throw error;
+    }
+  }
+
+  // Check and create reingestion pipeline
+  const reingestionPipelineName = `reingest-pipeline-${indexName}`;
+  try {
+    await osisClient.send(
+      new GetPipelineCommand({PipelineName: reingestionPipelineName}),
+    );
+    log
+      .info()
+      .str('pipelineName', reingestionPipelineName)
+      .msg('Reingestion pipeline already exists.');
+  } catch (error) {
+    if (error instanceof ResourceNotFoundException) {
+      log
+        .info()
+        .str('pipelineName', reingestionPipelineName)
+        .msg('Reingestion pipeline not found, creating new pipeline...');
+
+      // Define the time range for reingestion
+      const startTime = '1900-01-01T00:00:00Z';
+      const endTime = '1900-01-01T00:01:00Z';
+
+      await createReingestionPipeline(
+        reingestionPipelineName,
+        indexName,
+        bucketName,
+        startTime,
+        endTime,
+      );
+
+      // Create index pattern (shared between streaming and reingestion pipelines)
+      const client = await getOpenSearchClient();
+      await createIndexPattern(client, 'logs-', indexName);
+      await createIndexPattern(client, 'logs-archive-', indexName);
+    } else {
+      log
+        .error()
+        .err(error)
+        .msg('Error while checking reingestion pipeline existence');
       throw error;
     }
   }
@@ -148,6 +190,85 @@ async function createPipeline(
       .msg('Pipeline created successfully');
   } catch (error) {
     log.error().err(error).msg('Error creating pipeline');
+    throw error;
+  }
+}
+
+// Creates a new reingestion pipeline for historical data
+async function createReingestionPipeline(
+  pipelineName: string,
+  indexName: string,
+  bucketName: string,
+  startTime: string,
+  endTime: string,
+) {
+  const logGroupName = `/aws/vendedlogs/${pipelineName}`;
+  await ensureLogGroupExists(logGroupName);
+  const opensearchRoleArn = process.env.OSIS_ROLE_ARN || '';
+  const pipelineConfigurationBody = generateReingestionPipelineYaml(
+    `${getOpenSearchEndpoint()}`,
+    indexName,
+    REGION,
+    opensearchRoleArn,
+    bucketName,
+    pipelineName,
+    startTime,
+    endTime,
+    JSON.stringify({
+      settings: {
+        'number_of_shards': 2,
+        'number_of_replicas': 0,
+        'refresh_interval': '30s',
+        'index.queries.cache.enabled': false,
+        'index.requests.cache.enable': false,
+        'index.mapping.total_fields.limit': 3000,
+      },
+      mappings: {
+        properties: {
+          time: {
+            type: 'date',
+            format: 'epoch_millis',
+          },
+        },
+      },
+    }),
+  );
+
+  const input = {
+    PipelineName: pipelineName,
+    MinUnits: 1,
+    MaxUnits: 5,
+    PipelineConfigurationBody: pipelineConfigurationBody,
+    LogPublishingOptions: {
+      IsLoggingEnabled: false,
+      CloudWatchLogDestination: {
+        LogGroup: logGroupName,
+      },
+    },
+    BufferOptions: {
+      PersistentBufferEnabled: false,
+    },
+    Tags: [
+      {
+        Key: 'automation:id',
+        Value: process.env['AUTOMATION_ID'] ?? '',
+      },
+      {
+        Key: 'automation:url',
+        Value: process.env['AUTOMATION_URL'] ?? '',
+      },
+    ],
+  };
+  const osisClient = new OSISClient({region: REGION});
+
+  try {
+    await osisClient.send(new CreatePipelineCommand(input));
+    log
+      .info()
+      .str('pipelineName', pipelineName)
+      .msg('Reingestion pipeline created successfully');
+  } catch (error) {
+    log.error().err(error).msg('Error creating reingestion pipeline');
     throw error;
   }
 }
@@ -276,6 +397,67 @@ log-pipeline:
 `;
 }
 
+// Function to generate the YAML configuration for the reingestion pipeline
+function generateReingestionPipelineYaml(
+  opensearchHost: string,
+  indexName: string,
+  region: string,
+  stsRoleArn: string,
+  bucketName: string,
+  pipelineName: string,
+  startTime: string,
+  endTime: string,
+  indexMapping: string,
+) {
+  return `
+version: "2"
+reingestion-pipeline:
+  source:
+    s3:
+      compression: "gzip"
+      codec:
+        newline:
+      aws:
+        region: "${region}"
+        sts_role_arn: "${stsRoleArn}"
+      scan:
+        start_time: "${startTime}"
+        end_time: "${endTime}"
+        buckets:
+          - bucket:
+              name: "${bucketName}"
+              filter:
+                include_prefix:
+                  - "autolog/${indexName}/"
+  processor:
+    - substitute_string:
+        entries:
+          - source: "message"
+            from: "^.*info\\\\s\\\\{"
+            to: "{"
+    - parse_json:
+        parse_when: '/message =~ "^[{].*"'
+    - delete_entries:
+        with_keys: ["ctx/EventId"]
+    - date:
+        from_time_received: true
+        destination: "ingest_timestamp"
+  sink:
+    - opensearch:
+        hosts: ["${opensearchHost}"]
+        index: "logs-archive-${indexName}-%{yyyy.MM.dd}"
+        index_type: "custom"
+        bulk_size: 15
+        max_retries: 5
+        template_content: |
+          ${indexMapping}
+        aws:
+          serverless: false
+          region: "${region}"
+          sts_role_arn: "${stsRoleArn}"
+`;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createS3Notification = (event: any) => {
   const s3BucketArn = event.resources.find(
@@ -308,8 +490,12 @@ const createS3Notification = (event: any) => {
   return s3Notification;
 };
 
-async function createIndexPattern(client: OpenSearchClient, indexName: string) {
-  const indexPatternId = 'logs-' + indexName;
+async function createIndexPattern(
+  client: OpenSearchClient,
+  indexPatternPrefix: string,
+  indexName: string,
+) {
+  const indexPatternId = indexPatternPrefix + indexName;
   const indexPatternConfig = {
     title: `${indexPatternId}*`,
     timeFieldName: 'ingest_timestamp',

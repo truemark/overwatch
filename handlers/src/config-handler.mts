@@ -5,7 +5,7 @@ import {
   PartialIsmPolicy,
 } from './open-search-helper.mjs';
 import {developerRoleDefinition} from './role-definitions.mjs';
-import {deleteLogsAfter90DaysPolicy} from './ism-policies.mjs';
+import {deleteLogsPolicy} from './ism-policies.mjs';
 
 const log = logging.getLogger('config-handler');
 
@@ -17,9 +17,18 @@ function getOpenSearchAccessRoleArn(): string {
   return openSearchAccessRoleArn;
 }
 
-async function createOrUpdateISMPolicy(client: OpenSearchClient) {
-  const policyId = 'delete_logs_after_90_days';
-  const policy: PartialIsmPolicy = deleteLogsAfter90DaysPolicy;
+async function createOrUpdateISMPolicy(
+  client: OpenSearchClient,
+  policyId: string,
+  indexPattern: string,
+  days: number,
+  priority: number,
+) {
+  const policy: PartialIsmPolicy = deleteLogsPolicy(
+    indexPattern,
+    days,
+    priority,
+  );
 
   try {
     // Retrieve the current policy version
@@ -161,7 +170,8 @@ export async function handler(): Promise<void> {
     svc: 'overwatch',
   });
   const client = await getOpenSearchClient();
-  await createOrUpdateISMPolicy(client);
+  await createOrUpdateISMPolicy(client, 'delete_logs_after_90_days',"log-*", 90, 1);
+  await createOrUpdateISMPolicy(client, 'delete_archive_logs_after_3_days',"logs-archive-*", 3, 1);
   await updateRoleMappings(client);
   await createOrUpdateDeveloperRole(client);
   return;
