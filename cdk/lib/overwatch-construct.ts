@@ -115,7 +115,7 @@ export class Overwatch extends Construct {
       writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
       hostedDomainName: logsConfig.hostedDomainName,
       dataNodeInstanceType: logsConfig.dataNodeInstanceType,
-      dataNodes: 2,
+      dataNodes: 4,
       iops: 7500,
       throughput: 250,
       maxClauseCount: '4096',
