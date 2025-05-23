@@ -74,7 +74,6 @@ export class OverwatchStack extends ExtendedStack {
       if (!volumeSize) {
         throw new Error('volumeSize is required in context');
       }
-      const principalOrgId = app.node.tryGetContext('principalorgId');
 
       volumeSize = parseInt(volumeSize, 10);
       const idpEntityId = app.node.tryGetContext('idpEntityId');
@@ -131,7 +130,6 @@ export class OverwatchStack extends ExtendedStack {
         accountIds,
         dataNodeInstanceType,
         devRoleBackendIds,
-        principalOrgId,
       };
     }
     return {

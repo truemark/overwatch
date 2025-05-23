@@ -30,7 +30,6 @@ export interface LogsConfig {
   readonly accountIds: string[];
   readonly dataNodeInstanceType: string;
   readonly devRoleBackendIds: string;
-  readonly principalOrgId?: string[];
 }
 
 export interface GrafanaConfig {
@@ -182,8 +181,7 @@ export class Overwatch extends Construct {
 
   private createLogsBucket(
     mainTarget: LambdaFunction,
-    accountIds: string[],
-    principalOrgId?: string
+    accountIds: string[]
   ): Bucket {
     const logsBucket = new Bucket(this, 'Logs', {
       eventBridgeEnabled: true,
@@ -199,34 +197,6 @@ export class Overwatch extends Construct {
         resources: [logsBucket.arnForObjects('*')], // TODO This should be more restrictive
         effect: Effect.ALLOW,
         conditions: {},
-      })
-    );
-    if (principalOrgId) {
-      logsBucket.addToResourcePolicy(
-        new PolicyStatement({
-          actions: ['s3:PutObject', 's3:PutObjectAcl'],
-          principals: [new AnyPrincipal()],
-          resources: [logsBucket.arnForObjects('*')], // TODO This should be more restrictive
-          effect: Effect.ALLOW,
-          conditions: {
-            StringEquals: {
-              'aws:PrincipalOrgID': principalOrgId,
-            },
-          },
-        })
-      );
-    }
-    logsBucket.addToResourcePolicy(
-      new PolicyStatement({
-        actions: ['s3:PutObject', 's3:PutObjectAcl'],
-        principals: [new AnyPrincipal()],
-        resources: [logsBucket.bucketArn],
-        effect: Effect.ALLOW,
-        conditions: {
-          StringEquals: {
-            'aws:PrincipalOrgID': principalOrgId,
-          },
-        },
       })
     );
 
