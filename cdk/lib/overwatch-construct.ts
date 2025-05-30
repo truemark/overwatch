@@ -9,8 +9,8 @@ import {
   ServicePrincipal,
   User,
 } from 'aws-cdk-lib/aws-iam';
-import {CfnOutput, Stack} from 'aws-cdk-lib';
-import {Bucket, BucketEncryption} from 'aws-cdk-lib/aws-s3';
+import {CfnOutput, Stack, Duration} from 'aws-cdk-lib';
+import {Bucket, BucketEncryption, StorageClass} from 'aws-cdk-lib/aws-s3';
 import {MainFunction} from './main-function';
 import {Rule} from 'aws-cdk-lib/aws-events';
 import {StandardQueue} from 'truemark-cdk-lib/aws-sqs';
@@ -21,6 +21,7 @@ import {ConfigFunction} from './config-function';
 import {StandardWorkspace} from './standard-workspace';
 import {EngineVersion} from 'aws-cdk-lib/aws-opensearchservice';
 import {CfnDeliveryStream} from 'aws-cdk-lib/aws-kinesisfirehose';
+
 export interface LogsConfig {
   readonly volumeSize?: number;
   readonly idpEntityId: string;
@@ -30,6 +31,8 @@ export interface LogsConfig {
   readonly accountIds: string[];
   readonly dataNodeInstanceType: string;
   readonly devRoleBackendIds: string;
+  readonly s3GlacierIRTransitionDays?: number;
+  readonly s3ExpirationDays?: number;
 }
 
 export interface GrafanaConfig {
@@ -94,7 +97,12 @@ export class Overwatch extends Construct {
     });
 
     // S3 Bucket for log events storage
-    const logsBucket = this.createLogsBucket(mainTarget, logsConfig.accountIds);
+    const logsBucket = this.createLogsBucket(
+      mainTarget,
+      logsConfig.accountIds,
+      logsConfig.s3GlacierIRTransitionDays,
+      logsConfig.s3ExpirationDays
+    );
 
     //Add Kinesis Firehose for logs
     this.setupKinesisFirehose(logsBucket);
@@ -115,7 +123,7 @@ export class Overwatch extends Construct {
       writeAccess: [new AnyPrincipal()], // TODO What can we set this to for more security?
       hostedDomainName: logsConfig.hostedDomainName,
       dataNodeInstanceType: logsConfig.dataNodeInstanceType,
-      dataNodes: 2,
+      dataNodes: 4,
       iops: 7500,
       throughput: 250,
       maxClauseCount: '4096',
@@ -181,12 +189,27 @@ export class Overwatch extends Construct {
 
   private createLogsBucket(
     mainTarget: LambdaFunction,
-    accountIds: string[]
+    accountIds: string[],
+    s3GlacierIRTransitionDays?: number,
+    s3ExpirationDays?: number
   ): Bucket {
     const logsBucket = new Bucket(this, 'Logs', {
       eventBridgeEnabled: true,
       encryption: BucketEncryption.S3_MANAGED,
       bucketName: Stack.of(this).account + '-logs',
+      lifecycleRules: [
+        {
+          id: 'TransitionToGIRThenDelete',
+          enabled: true,
+          transitions: [
+            {
+              storageClass: StorageClass.GLACIER_INSTANT_RETRIEVAL,
+              transitionAfter: Duration.days(s3GlacierIRTransitionDays ?? 30),
+            },
+          ],
+          expiration: Duration.days(s3ExpirationDays ?? 365),
+        },
+      ],
     });
     logsBucket.addToResourcePolicy(
       new PolicyStatement({

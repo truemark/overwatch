@@ -74,6 +74,7 @@ export class OverwatchStack extends ExtendedStack {
       if (!volumeSize) {
         throw new Error('volumeSize is required in context');
       }
+
       volumeSize = parseInt(volumeSize, 10);
       const idpEntityId = app.node.tryGetContext('idpEntityId');
       if (!idpEntityId) {
@@ -114,6 +115,12 @@ export class OverwatchStack extends ExtendedStack {
         throw new Error('Missing devRoleBackendIds in context');
       }
       accountIds = accountIds.split(',');
+      const s3GlacierIRTransitionDays = parseNumberContext(
+        app,
+        's3GlacierIRTransitionDays'
+      );
+      const s3ExpirationDays = parseNumberContext(app, 's3ExpirationDays');
+
       logsConfig = {
         volumeSize,
         idpEntityId,
@@ -129,6 +136,8 @@ export class OverwatchStack extends ExtendedStack {
         accountIds,
         dataNodeInstanceType,
         devRoleBackendIds,
+        s3GlacierIRTransitionDays,
+        s3ExpirationDays,
       };
     }
     return {
@@ -140,4 +149,15 @@ export class OverwatchStack extends ExtendedStack {
   static fromContext(app: App, id: string): OverwatchStack {
     return new OverwatchStack(app, id, OverwatchStack.propsFromContext(app));
   }
+}
+function parseNumberContext(app: App, key: string): number | undefined {
+  const raw = app.node.tryGetContext(key);
+  if (raw === undefined) return undefined;
+  const parsed = parseInt(raw, 10);
+  if (isNaN(parsed)) {
+    throw new Error(
+      `Invalid value for context "${key}": must be a number, got "${raw}"`
+    );
+  }
+  return parsed;
 }
