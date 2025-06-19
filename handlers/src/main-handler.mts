@@ -142,7 +142,7 @@ async function createPipeline(
         'refresh_interval': '30s',
         'index.queries.cache.enabled': false,
         'index.requests.cache.enable': false,
-        'index.mapping.total_fields.limit': 5000,
+        'index.mapping.total_fields.limit': 10000,
       },
       mappings: {
         properties: {
@@ -221,7 +221,7 @@ async function createReingestionPipeline(
         'refresh_interval': '30s',
         'index.queries.cache.enabled': false,
         'index.requests.cache.enable': false,
-        'index.mapping.total_fields.limit': 5000,
+        'index.mapping.total_fields.limit': 10000,
       },
       mappings: {
         properties: {
