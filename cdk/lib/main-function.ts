@@ -18,7 +18,7 @@ export class MainFunction extends ExtendedNodejsFunction {
         '..',
         'handlers',
         'src',
-        'main-handler.mts'
+        'main-handler.mts',
       ),
       architecture: Architecture.ARM_64,
       handler: 'handler',
@@ -51,7 +51,7 @@ export class MainFunction extends ExtendedNodejsFunction {
           'sqs:TagQueue',
         ],
         resources: ['*'],
-      })
+      }),
     );
 
     props.openSearchMasterRole.grantAssumeRole(this.grantPrincipal);

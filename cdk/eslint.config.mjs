@@ -5,7 +5,15 @@ import tseslint from 'typescript-eslint';
 
 const config = [
   {
-    ignores: ['src/**/*.mjs', 'src/**/*.d.*'],
+    ignores: [
+      'cdk.out',
+      'node_modules',
+      'pnpm-lock.yaml',
+      '**/*.js',
+      '**/*.d.*',
+      '**/*.map',
+      '**/*.mjs',
+    ],
   },
   ...tseslint.config(
     eslint.configs.recommended,
@@ -15,8 +23,8 @@ const config = [
         '@typescript-eslint/no-unused-vars': 'warn',
         '@typescript-eslint/no-empty-object-type': 'warn',
         '@typescript-eslint/no-explicit-any': 'warn',
-      },
-    },
+      }
+    }
   ),
 ];
 export default config;

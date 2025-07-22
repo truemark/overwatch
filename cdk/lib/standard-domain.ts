@@ -21,7 +21,7 @@ export interface HostedZoneAttributes {
 }
 
 function isHostedZoneAttributes(
-  zone: HostedZoneAttributes | IHostedZone
+  zone: HostedZoneAttributes | IHostedZone,
 ): zone is HostedZoneAttributes {
   return (zone as HostedZoneAttributes).hostedZoneId !== undefined;
 }
@@ -265,7 +265,7 @@ export class StandardDomain extends Construct {
       new PolicyStatement({
         actions: ['es:ESHttpPost', 'es:ESHttpPut'],
         resources: [this.domain.domainArn, `${this.domain.domainArn}/*`],
-      })
+      }),
     );
 
     this.domain.addAccessPolicies(
@@ -280,7 +280,7 @@ export class StandardDomain extends Construct {
         effect: Effect.ALLOW,
         principals: [...(props.writeAccess ?? []), ingestionRole],
         resources: [this.domain.domainArn, `${this.domain.domainArn}/*`],
-      })
+      }),
     );
     this.domainArn = this.domain.domainArn;
     this.domainEndpoint = this.domain.domainEndpoint;

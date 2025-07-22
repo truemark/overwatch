@@ -45,7 +45,7 @@ export class OverwatchStack extends ExtendedStack {
         : undefined;
 
       const securityGroupIds = app.node.tryGetContext(
-        'grafanaVPCSecurityGroupIds'
+        'grafanaVPCSecurityGroupIds',
       )
         ? app.node.tryGetContext('grafanaVPCSecurityGroupIds').split(',')
         : undefined;
@@ -105,7 +105,7 @@ export class OverwatchStack extends ExtendedStack {
         throw new Error('Missing accountIds in context');
       }
       const dataNodeInstanceType = app.node.tryGetContext(
-        'dataNodeInstanceType'
+        'dataNodeInstanceType',
       );
       if (!dataNodeInstanceType) {
         throw new Error('Missing dataNodeInstanceType in context');
@@ -117,7 +117,7 @@ export class OverwatchStack extends ExtendedStack {
       accountIds = accountIds.split(',');
       const s3GlacierIRTransitionDays = parseNumberContext(
         app,
-        's3GlacierIRTransitionDays'
+        's3GlacierIRTransitionDays',
       );
       const s3ExpirationDays = parseNumberContext(app, 's3ExpirationDays');
 
@@ -156,7 +156,7 @@ function parseNumberContext(app: App, key: string): number | undefined {
   const parsed = parseInt(raw, 10);
   if (isNaN(parsed)) {
     throw new Error(
-      `Invalid value for context "${key}": must be a number, got "${raw}"`
+      `Invalid value for context "${key}": must be a number, got "${raw}"`,
     );
   }
   return parsed;

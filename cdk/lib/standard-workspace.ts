@@ -93,17 +93,17 @@ export class StandardWorkspace extends ExtendedConstruct {
           'organizations:ListOrganizationalUnitsForParent',
         ],
         resources: ['*'],
-      })
+      }),
     );
     this.role.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName(
-        'service-role/AmazonGrafanaCloudWatchAccess'
-      )
+        'service-role/AmazonGrafanaCloudWatchAccess',
+      ),
     );
     this.role.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName(
-        'service-role/AmazonGrafanaAthenaAccess'
-      )
+        'service-role/AmazonGrafanaAthenaAccess',
+      ),
     );
 
     this.role.addToPolicy(
@@ -115,7 +115,7 @@ export class StandardWorkspace extends ExtendedConstruct {
           'es:ListDomainNames',
         ],
         resources: ['*'],
-      })
+      }),
     );
     this.role.addToPolicy(
       new PolicyStatement({
@@ -125,7 +125,7 @@ export class StandardWorkspace extends ExtendedConstruct {
           'arn:aws:es:*:*:domain/*/_msearch*',
           'arn:aws:es:*:*:domain/*/_opendistro/_ppl',
         ],
-      })
+      }),
     );
     this.role.addToPolicy(
       new PolicyStatement({
@@ -139,7 +139,7 @@ export class StandardWorkspace extends ExtendedConstruct {
           'aps:GetMetricMetadata',
         ],
         resources: ['*'],
-      })
+      }),
     );
     this.role.addToPolicy(
       new PolicyStatement({
@@ -151,10 +151,10 @@ export class StandardWorkspace extends ExtendedConstruct {
           'sns:Publish',
         ],
         resources: ['*'],
-      })
+      }),
     );
     this.role.addManagedPolicy(
-      ManagedPolicy.fromAwsManagedPolicyName('AWSXrayReadOnlyAccess')
+      ManagedPolicy.fromAwsManagedPolicyName('AWSXrayReadOnlyAccess'),
     );
     this.workspace = new CfnWorkspace(this, 'Grafana', {
       name: props?.name,
@@ -175,7 +175,7 @@ export class StandardWorkspace extends ExtendedConstruct {
       instructions.push({
         action: 'ADD',
         role: 'ADMIN',
-        users: props.adminGroups.map(group => ({
+        users: props.adminGroups.map((group) => ({
           id: group,
           type: 'SSO_GROUP',
         })),
@@ -185,7 +185,7 @@ export class StandardWorkspace extends ExtendedConstruct {
       instructions.push({
         action: 'ADD',
         role: 'EDITOR',
-        users: props.editorGroups.map(group => ({
+        users: props.editorGroups.map((group) => ({
           id: group,
           type: 'SSO_GROUP',
         })),
@@ -243,7 +243,7 @@ export class StandardWorkspace extends ExtendedConstruct {
           }),
         },
         physicalResourceId: PhysicalResourceId.of(
-          'UpdateWorkspaceConfiguration'
+          'UpdateWorkspaceConfiguration',
         ),
       };
 
@@ -281,7 +281,7 @@ export class StandardWorkspace extends ExtendedConstruct {
         effect: Effect.ALLOW,
         actions: ['sts:AssumeRole'],
         resources: role,
-      })
+      }),
     );
   }
 }

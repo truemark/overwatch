@@ -5,29 +5,33 @@
     "overwatch": "bin/overwatch.js"
   },
   "scripts": {
+    "prebuild": "prettier --check . && eslint .",
     "build": "tsc",
-    "prebuild": "prettier --check . && gts lint",
     "watch": "tsc -w",
     "test": "jest",
-    "lint": "gts lint",
+    "clean": "rm -rf cdk.out && find ./bin ./lib -type f \\( -name \"*.js\" -o -name \"*.d.*\" -o -name \"*.map\" \\) -exec rm -f {} \\;",
     "cdk": "cdk",
     "fmt": "prettier --write ."
   },
   "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "@types/node": "20.11.16",
-    "aws-cdk": "2.147.1",
-    "esbuild": "^0.20.1",
-    "gts": "^5.2.0",
+    "@eslint/js": "^9.31.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.16.5",
+    "@types/prettier": "^2.7.3",
+    "aws-cdk": "^2.1021.0",
+    "esbuild": "^0.25.8",
+    "eslint": "^9.31.0",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
+    "prettier": "^3.6.2",
+    "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",
-    "typescript": "~5.3.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.38.0"
   },
   "dependencies": {
-    "aws-cdk-lib": "2.147.1",
-    "constructs": "^10.0.0",
+    "aws-cdk-lib": "2.206.0",
+    "constructs": "^10.4.2",
     "source-map-support": "^0.5.21",
-    "truemark-cdk-lib": "^1.14.0"
+    "truemark-cdk-lib": "^1.19.3"
   }
 }

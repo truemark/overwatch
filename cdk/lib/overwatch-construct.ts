@@ -101,7 +101,7 @@ export class Overwatch extends Construct {
       mainTarget,
       logsConfig.accountIds,
       logsConfig.s3GlacierIRTransitionDays,
-      logsConfig.s3ExpirationDays
+      logsConfig.s3ExpirationDays,
     );
 
     //Add Kinesis Firehose for logs
@@ -135,13 +135,13 @@ export class Overwatch extends Construct {
         effect: Effect.ALLOW,
         actions: ['es:*'],
         resources: [domain.domainArn],
-      })
+      }),
     );
 
     // Create an IAM Role with attached policies
     const osAccessRole = this.createOpenSearchAccessRole(
       domain.domainArn,
-      logsBucket.bucketArn
+      logsBucket.bucketArn,
     );
     osAccessRole.node.addDependency(domain);
     osAccessRole.node.addDependency(logsBucket);
@@ -153,7 +153,7 @@ export class Overwatch extends Construct {
     //Add Lambda environment variables
     mainFunction.addEnvironment(
       'OPEN_SEARCH_ENDPOINT',
-      `https://${domain.domainEndpoint}`
+      `https://${domain.domainEndpoint}`,
     );
     mainFunction.addEnvironment('OSIS_ROLE_ARN', osAccessRole.roleArn);
     const configFunction = new ConfigFunction(this, 'ConfigFunction', {
@@ -163,7 +163,7 @@ export class Overwatch extends Construct {
     });
     configFunction.addEnvironment(
       'DEVELOPER_ROLE_BACKEND_GROUPS',
-      logsConfig.devRoleBackendIds
+      logsConfig.devRoleBackendIds,
     );
   }
 
@@ -191,7 +191,7 @@ export class Overwatch extends Construct {
     mainTarget: LambdaFunction,
     accountIds: string[],
     s3GlacierIRTransitionDays?: number,
-    s3ExpirationDays?: number
+    s3ExpirationDays?: number,
   ): Bucket {
     const logsBucket = new Bucket(this, 'Logs', {
       eventBridgeEnabled: true,
@@ -215,12 +215,12 @@ export class Overwatch extends Construct {
       new PolicyStatement({
         actions: ['s3:PutObject', 's3:PutObjectAcl'],
         principals: accountIds.map(
-          accountId => new AccountPrincipal(accountId)
+          (accountId) => new AccountPrincipal(accountId),
         ),
         resources: [logsBucket.arnForObjects('*')], // TODO This should be more restrictive
         effect: Effect.ALLOW,
         conditions: {},
-      })
+      }),
     );
 
     new CfnOutput(this, 'LogsBucketArn', {
@@ -263,7 +263,7 @@ export class Overwatch extends Construct {
 
   private createOpenSearchAccessRole(
     domainArn: string,
-    bucketArn: string
+    bucketArn: string,
   ): Role {
     const role = new Role(this, 'AccessRole', {
       assumedBy: new ServicePrincipal('osis-pipelines.amazonaws.com'),
@@ -309,14 +309,14 @@ export class Overwatch extends Construct {
     ];
 
     // Attach each policy statement to the role
-    policyStatements.forEach(policy => role.addToPolicy(policy));
+    policyStatements.forEach((policy) => role.addToPolicy(policy));
 
     return role;
   }
 
   private setupEventBridge(
     logsBucket: Bucket,
-    mainTarget: LambdaFunction
+    mainTarget: LambdaFunction,
   ): void {
     const logsBucketRule = new Rule(this, 'LogsBucketRule', {
       eventPattern: {
@@ -345,7 +345,7 @@ export class Overwatch extends Construct {
         actions: ['s3:PutObject', 's3:PutObjectAcl'],
         resources: [logsBucket.bucketArn, `${logsBucket.bucketArn}/*`],
         effect: Effect.ALLOW,
-      })
+      }),
     );
 
     // Firehose Extended S3 Destination Configuration for Prod
@@ -420,7 +420,7 @@ export class Overwatch extends Construct {
           nonprodLogsFirehose.attrArn,
           syslogFirehose.attrArn,
         ],
-      })
+      }),
     );
   }
 }

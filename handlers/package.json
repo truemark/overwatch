@@ -11,28 +11,28 @@
     "fmt": "prettier --write ."
   },
   "dependencies": {
-    "@aws-sdk/client-cloudwatch-logs": "^3.632.0",
-    "@aws-sdk/client-firehose": "^3.632.0",
-    "@aws-sdk/client-iam": "^3.632.0",
-    "@aws-sdk/client-osis": "^3.632.0",
-    "@aws-sdk/client-sqs": "^3.632.0",
-    "@aws-sdk/client-ssm": "^3.632.0",
-    "@aws-sdk/client-sts": "^3.632.0",
-    "@aws-sdk/util-arn-parser": "^3.568.0",
-    "@nr1e/logging": "^1.4.1",
-    "@opensearch-project/opensearch": "^2.11.0"
+    "@aws-sdk/client-cloudwatch-logs": "^3.849.0",
+    "@aws-sdk/client-firehose": "^3.848.0",
+    "@aws-sdk/client-iam": "^3.848.0",
+    "@aws-sdk/client-osis": "^3.848.0",
+    "@aws-sdk/client-sqs": "^3.848.0",
+    "@aws-sdk/client-ssm": "^3.849.0",
+    "@aws-sdk/client-sts": "^3.848.0",
+    "@aws-sdk/util-arn-parser": "^3.804.0",
+    "@nr1e/logging": "^1.6.0",
+    "@opensearch-project/opensearch": "^2.13.0"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.143",
-    "@types/node": "20.16.0",
+    "@types/aws-lambda": "^8.10.152",
+    "@types/node": "22.16.5",
     "aws-sdk-client-mock": "^1.0.0",
     "source-map-support": "^0.5.21",
-    "@eslint/js": "^8.57.0",
-    "@vitest/coverage-v8": "^1.6.0",
-    "eslint": "^8.57.0",
-    "prettier": "^3.3.3",
-    "vitest": "^1.6.0",
-    "typescript": "~5.4.5",
-    "typescript-eslint": "^7.16.0"
+    "@eslint/js": "^8.57.1",
+    "@vitest/coverage-v8": "^1.6.1",
+    "eslint": "^8.57.1",
+    "prettier": "^3.6.2",
+    "vitest": "^1.6.1",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^7.18.0"
   }
 }

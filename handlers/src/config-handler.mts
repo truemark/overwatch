@@ -7,7 +7,12 @@ import {
 import {developerRoleDefinition} from './role-definitions.mjs';
 import {deleteLogsPolicy} from './ism-policies.mjs';
 
-const log = logging.getLogger('config-handler');
+const log = logging
+  .initialize({
+    level: 'debug',
+    svc: 'overwatch',
+  })
+  .child('config-handler');
 
 function getOpenSearchAccessRoleArn(): string {
   const openSearchAccessRoleArn = process.env.OPEN_SEARCH_ACCESS_ROLE_ARN;
@@ -170,8 +175,20 @@ export async function handler(): Promise<void> {
     svc: 'overwatch',
   });
   const client = await getOpenSearchClient();
-  await createOrUpdateISMPolicy(client, 'delete_logs_after_90_days',"log-*", 90, 1);
-  await createOrUpdateISMPolicy(client, 'delete_archive_logs_after_3_days',"logs-archive-*", 3, 1);
+  await createOrUpdateISMPolicy(
+    client,
+    'delete_logs_after_90_days',
+    'log-*',
+    90,
+    1,
+  );
+  await createOrUpdateISMPolicy(
+    client,
+    'delete_archive_logs_after_3_days',
+    'logs-archive-*',
+    3,
+    1,
+  );
   await updateRoleMappings(client);
   await createOrUpdateDeveloperRole(client);
   return;

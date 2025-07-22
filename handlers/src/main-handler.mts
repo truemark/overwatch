@@ -23,7 +23,13 @@ import {
 // Constants for configuration
 const REGION = process.env.AWS_REGION!;
 
-const log = logging.getLogger('main-handler');
+const log = logging
+  .initialize({
+    level: 'debug',
+    svc: 'overwatch',
+  })
+  .child('main-handler');
+
 const sqsClient = new SQSClient({});
 
 // Extracts bucket name and object key from the event
