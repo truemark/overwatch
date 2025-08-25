@@ -39,10 +39,28 @@ export class OverwatchStack extends ExtendedStack {
       } else {
         organizationalUnits = organizationalUnits.split(',');
       }
+
+      const subnetIds = app.node.tryGetContext('grafanaVPCSubnetIds')
+        ? app.node.tryGetContext('grafanaVPCSubnetIds').split(',')
+        : undefined;
+
+      const securityGroupIds = app.node.tryGetContext(
+        'grafanaVPCSecurityGroupIds',
+      )
+        ? app.node.tryGetContext('grafanaVPCSecurityGroupIds').split(',')
+        : undefined;
+
       grafanaConfig = {
         adminGroups,
         editorGroups,
         organizationalUnits,
+        vpcConfiguration:
+          subnetIds && securityGroupIds
+            ? {
+                subnetIds,
+                securityGroupIds,
+              }
+            : undefined,
       };
     }
 
@@ -56,6 +74,7 @@ export class OverwatchStack extends ExtendedStack {
       if (!volumeSize) {
         throw new Error('volumeSize is required in context');
       }
+
       volumeSize = parseInt(volumeSize, 10);
       const idpEntityId = app.node.tryGetContext('idpEntityId');
       if (!idpEntityId) {
@@ -85,7 +104,23 @@ export class OverwatchStack extends ExtendedStack {
       if (!accountIds) {
         throw new Error('Missing accountIds in context');
       }
+      const dataNodeInstanceType = app.node.tryGetContext(
+        'dataNodeInstanceType',
+      );
+      if (!dataNodeInstanceType) {
+        throw new Error('Missing dataNodeInstanceType in context');
+      }
+      const devRoleBackendIds = app.node.tryGetContext('devRoleBackendIds');
+      if (!devRoleBackendIds) {
+        throw new Error('Missing devRoleBackendIds in context');
+      }
       accountIds = accountIds.split(',');
+      const s3GlacierIRTransitionDays = parseNumberContext(
+        app,
+        's3GlacierIRTransitionDays',
+      );
+      const s3ExpirationDays = parseNumberContext(app, 's3ExpirationDays');
+
       logsConfig = {
         volumeSize,
         idpEntityId,
@@ -99,6 +134,10 @@ export class OverwatchStack extends ExtendedStack {
           },
         },
         accountIds,
+        dataNodeInstanceType,
+        devRoleBackendIds,
+        s3GlacierIRTransitionDays,
+        s3ExpirationDays,
       };
     }
     return {
@@ -110,4 +149,15 @@ export class OverwatchStack extends ExtendedStack {
   static fromContext(app: App, id: string): OverwatchStack {
     return new OverwatchStack(app, id, OverwatchStack.propsFromContext(app));
   }
+}
+function parseNumberContext(app: App, key: string): number | undefined {
+  const raw = app.node.tryGetContext(key);
+  if (raw === undefined) return undefined;
+  const parsed = parseInt(raw, 10);
+  if (isNaN(parsed)) {
+    throw new Error(
+      `Invalid value for context "${key}": must be a number, got "${raw}"`,
+    );
+  }
+  return parsed;
 }

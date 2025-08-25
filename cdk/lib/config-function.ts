@@ -18,10 +18,9 @@ export class ConfigFunction extends ExtendedNodejsFunction {
         __dirname,
         '..',
         '..',
-        '..',
         'handlers',
         'src',
-        'config-handler.mts'
+        'config-handler.mts',
       ),
       architecture: Architecture.ARM_64,
       handler: 'handler',

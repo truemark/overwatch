@@ -133,19 +133,21 @@ export class OpenSearchClient extends Client {
       policy: PartialIsmPolicy,
       seqNo?: number,
       primaryTerm?: number,
-    ): Promise<void> => {
+    ): Promise<any> => {
       const path = `/_plugins/_ism/policies/${policyId}`;
       const querystring: Record<string, string | number> = {};
       if (seqNo && primaryTerm) {
         querystring.if_seq_no = seqNo;
         querystring.if_primary_term = primaryTerm;
       }
-      await this.transport.request({
+      const {body} = await this.transport.request({
         method: 'PUT',
         path,
         querystring,
         body: {policy},
       });
+
+      return body;
     },
   };
 
@@ -165,9 +167,9 @@ export class OpenSearchClient extends Client {
     updateRoleMapping: async (
       name: string,
       mapping: RoleMappingUpdate,
-    ): Promise<void> => {
+    ): Promise<any> => {
       const path = `/_plugins/_security/api/rolesmapping/${name}`;
-      await this.transport.request({
+      const {body} = await this.transport.request({
         method: 'PUT',
         path,
         body: {
@@ -177,6 +179,19 @@ export class OpenSearchClient extends Client {
           backend_roles: mapping.backend_roles,
         },
       });
+
+      return body;
+    },
+
+    updateRole: async (name: string, roleDefinition: any): Promise<any> => {
+      const path = `/_plugins/_security/api/roles/${name}`;
+      const {body} = await this.transport.request({
+        method: 'PUT',
+        path,
+        body: roleDefinition,
+      });
+
+      return body;
     },
   };
 
